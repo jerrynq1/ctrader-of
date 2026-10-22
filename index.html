@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gexadecimal – Order Flow Trading Platform</title>
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Unbounded:wght@800&family=Sora:wght@500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=10">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body class="nt">
+<canvas id="sky"></canvas>
+<div class="scrim" id="scrim"></div>
+<aside id="side">
+  <div class="sh"><button class="ib" id="tg" type="button" aria-label="Thu gọn thanh bên"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3.5"/><path d="M9.5 4v16"/></svg></button><h1 class="brand"><img class="blogo" src="img/logo.png" alt=""><span class="wm">Gexadecimal</span></h1></div>
+  <nav id="nav"></nav>
+  <div class="sf"><button class="sb" id="th" type="button"></button></div>
+</aside>
+<div class="main">
+<div class="topbar"><button class="ib" id="tg2" type="button" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3.5"/><path d="M9.5 4v16"/></svg></button><span class="brand"><img class="blogo" src="img/logo.png" alt=""><span class="wm">Gexadecimal</span></span></div>
+<div class="wrap">
+
+<section class="view on" id="v-chart">
+  <div class="card bar">
+    <input id="sym" list="symList" title="Mã giao dịch (đúng tên trên cTrader, vd XAUUSD)" aria-label="Mã"><datalist id="symList"></datalist>
+    <div class="tfs" id="tfs"></div>
+    <span class="pill" id="st">Chưa kết nối</span>
+    <button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button>
+<div class="px"><span><small>Bid</small><b id="bid">–</b></span><span><small>Ask</small><b id="ask">–</b></span></div>
+  </div>
+  <div class="card" id="chartCard"><div id="ohlc"></div><div id="legend"></div><div id="cw"><div id="chart"></div><div id="panes"></div></div>
+    <div id="clk"><button type="button" id="clkB" aria-haspopup="dialog" aria-expanded="false" title="Đổi múi giờ hiển thị"><span id="clkT">--:--:--</span><small id="clkZ"></small><span aria-hidden="true">▾</span></button></div>
+    <div id="tzp" role="dialog" aria-label="Múi giờ"></div>
+  </div>
+</section>
+
+<section class="view" id="v-ind">
+  <div class="card"><h2>Đang dùng trên chart</h2><div id="actList"></div></div>
+  <div class="card" style="margin-top:14px"><div class="bar" style="margin-bottom:12px"><h2 style="margin:0">Kho indicator</h2><div class="tfs" id="indF"></div></div><div class="grid" id="indGrid"></div></div>
+</section>
+
+<section class="view" id="v-cs"><div id="csBody"></div></section>
+
+<section class="view" id="v-conn">
+  <div class="card" style="max-width:520px">
+    <h2>Kết nối cTrader Open API</h2>
+    <label class="msg" for="cId">Client ID</label><input id="cId" autocomplete="off">
+    <label class="msg" for="cSec" style="display:block;margin-top:10px">Client Secret</label><input id="cSec" type="password" autocomplete="off">
+    <label class="msg" for="cTok" style="display:block;margin-top:10px">Access Token</label><input id="cTok" type="password" autocomplete="off">
+    <label class="msg" for="cAcc" style="display:block;margin-top:10px">Account ID (ctidTraderAccountId, để trống = tự lấy tài khoản đầu tiên)</label><input id="cAcc" inputmode="numeric" autocomplete="off">
+    <label class="msg" for="cEnv" style="display:block;margin-top:10px">Môi trường (tài khoản live dùng Live, demo dùng Demo)</label><select id="cEnv"><option value="live">Live</option><option value="demo">Demo</option></select>
+    <label class="msg" for="cDays" style="display:block;margin-top:10px">Số ngày nến M1 tải về (nhiều ngày = xem được khung lớn hơn)</label><input id="cDays" type="number" min="1" max="365">
+    <div class="bar" style="margin-top:14px"><button class="btn" id="cSave">Lưu và kiểm tra</button><span class="msg" id="cMsg"></span></div>
+  </div>
+</section>
+
+</div></div>
+
+
+<script src="js/config.js?v=10"></script>
+<script src="js/core.js?v=10"></script>
+<script src="js/timezone.js?v=10"></script>
+<script src="js/ctrader.js?v=10"></script>
+<script src="js/chart.js?v=10"></script>
+<script src="js/candle-style.js?v=10"></script>
+<script src="js/indicators-defs.js?v=10"></script>
+<script src="js/indicators-engine.js?v=10"></script>
+<script src="js/connection-ui.js?v=10"></script>
+<script src="js/init.js?v=10"></script>
+<script src="js/drawings-core.js?v=10"></script>
+<script src="js/volume-profile.js?v=10"></script>
+<script src="js/orderflow-footprint.js?v=10"></script>
+<script src="js/orderflow-bigtrade.js?v=10"></script>
+<script src="js/orderflow-statistic.js?v=10"></script>
+<script src="js/drawings-interact.js?v=10"></script>
+<script src="js/mobile.js?v=10"></script>
+<script src="js/i18n-data.js?v=10"></script>
+<script src="js/i18n.js?v=10"></script>
+</body>
+</html>
