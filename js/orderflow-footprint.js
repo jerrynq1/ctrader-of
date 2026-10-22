@@ -1,5 +1,5 @@
 /* ===== Orderflow: Footprint (indicator "fpr") ===== */
-const FPM=new Map();let FPV=0,FPH=0,FPLV=0,fpSym="",fpLast=0,fpBusy=false,fpDays=0,fpEpoch=0,fpRetry=0,fpStart=0,fpCov=null,fpGap=0;
+const FPM=new Map();let FPV=0,FPH=0,FPLV=0,fpSym="",fpLast=0,fpBusy=false,fpEpoch=0,fpRetry=0,fpStart=0,fpCov=null,fpGap=0;
 /* Gộp hàng giá bằng SỐ NGUYÊN (đơn vị 1/100000) để không bị sai số số thực ở biên hàng: hàng q phủ khoảng giá [q*step, (q+1)*step). Dùng chung cho Footprint / Big Trade / Statistic. */
 const FPU=1e5,fpSI=step=>Math.max(1,Math.round(step*FPU));
 const fpQ=(p,step)=>Math.floor(Math.round(p*FPU)/fpSI(step));      // chỉ số hàng chứa giá p
@@ -8,29 +8,45 @@ const fpOn=()=>ACT.find(x=>x.key==="fpr"&&isOn(x)),btOn=()=>ACT.find(x=>x.key===
 const fpRgb=h=>{const m=/^#?([0-9a-f]{6})$/i.exec(h||"");const n=m?parseInt(m[1],16):8421504;return(n>>16)+","+((n>>8)&255)+","+(n&255)};
 const fpFm=v=>{const a=Math.abs(v);return(v<0?"-":"")+(a>=1e4?(a/1e3).toFixed(1)+"K":Math.round(a))};
 const btGap=()=>{const b=btOn();return b?Math.max(50,Math.min(5000,Math.round(+b.p.gap)||300)):300};   // khoảng nghỉ tối đa (ms) giữa 2 tick của 1 chuỗi Big Trade
-const fpDy=()=>{const fa=fpOn(),ba=btOn(),sa=stOn();return Math.max(fa?fa.p.days:0,ba?ba.p.days:0,sa?sa.p.days:0)};
 async function fpSync(){
-  const a=fpOn()||btOn()||stOn();if(!a||fpBusy||!ctReady()||!m1.length||Date.now()<fpRetry)return;fpBusy=true;const dy=fpDy(),gp=btGap();
+  const a=fpOn()||btOn()||stOn();if(!a||fpBusy||!ctReady()||!m1.length||Date.now()<fpRetry)return;fpBusy=true;const gp=btGap();
   try{
-    if(fpSym!==C.sym||fpDays!==dy||fpEpoch!==CT.epoch||fpGap!==gp){FPM.clear();BTE.clear();fpSym=C.sym;fpDays=dy;fpEpoch=CT.epoch;fpGap=gp;BTG.gap=gp;fpLast=0;fpCov=null;FPH++;ctFpReset()}
-    if(fpLast)return;                       // đã tải xong: phần live do ctrader.js tự cộng dồn từ tick (poll() đẩy vào FPM)
-    /* Lần tải đầu: tick lịch sử theo từng cửa sổ MỚI -> CŨ (3 giờ, 6 giờ, 12 giờ, rồi 1 ngày/lần). Cửa sổ nào về là vẽ footprint ngay (FPV++).
+    if(fpSym!==C.sym||fpEpoch!==CT.epoch||fpGap!==gp){FPM.clear();BTE.clear();fpSym=C.sym;fpEpoch=CT.epoch;fpGap=gp;BTG.gap=gp;fpLast=0;fpStart=0;fpCov=null;FPH++;ctFpReset()}
+    const ok=()=>C.sym===fpSym&&fpEpoch===CT.epoch&&btGap()===fpGap&&ctReady();
+    /* Tick tải THEO NHU CẦU, giống nến M1: chỉ tải tới nến trái nhất đang nhìn thấy (fpNeed), kéo chart sang trái thì tải thêm phần cũ hơn.
+       Lần tải đầu: tick lịch sử theo từng cửa sổ MỚI -> CŨ (2 giờ, 4 giờ, 6 giờ/lần). Cửa sổ nào về là vẽ footprint ngay (FPV++).
        Cửa sổ mới nhất kết thúc ở "bây giờ" và chuyển sang chế độ live (nối tiếp từ tick cuối, không trùng, không hở). */
-    const now=Date.now(),start=Math.floor((now-dy*86400e3)/6e4)*6e4,ok=()=>C.sym===fpSym&&fpDy()===fpDays&&fpEpoch===CT.epoch&&btGap()===fpGap&&ctReady();
-    fpStart=Math.floor(start/1000);let hi=now,span=2*3600e3,first=true;
-    status("Đang tải tick footprint…","");
-    for(;;){
-      const lo=Math.max(start,Math.floor((hi-span)/6e4)*6e4);
-      await ctFpWindow(lo,first?hi:hi-1,first);
-      if(!ok())return;                                       // đổi mã / đổi số ngày / nối lại giữa chừng: bỏ, lần sau tải lại từ đầu
-      FPV++;FPH++;fpCov=null;dirty=true;first=false;
-      hi=lo;span=Math.min(span*2,6*3600e3);
-      if(lo<=start)break;
+    const first=!fpLast,now=Date.now();
+    let hi=first?now:fpStart*1000,lo0;
+    if(first){lo0=Math.floor(fpNeed()/6e4)*6e4;fpStart=Math.floor(lo0/1000);status("Đang tải tick footprint…","")}
+    else{
+      const need=Math.floor(fpNeed()/6e4)*6e4;
+      if(need>=hi-6e4)return;                               // đã đủ tick cho vùng đang xem
+      lo0=Math.max(fpCap(),Math.floor(Math.min(need,hi-3600e3)/6e4)*6e4);   // tải thêm tối thiểu 1 giờ/lần để kéo chart không bị tải vụn
+      if(lo0>=hi)return;
+      status("Đang tải thêm tick footprint…","");
     }
-    fpLast=Math.floor(now/1000);
+    let span=first?2*3600e3:4*3600e3,isFirst=first;
+    for(;;){
+      const lo=Math.max(lo0,Math.floor((hi-span)/6e4)*6e4);
+      await ctFpWindow(lo,isFirst?hi:hi-1,isFirst);
+      if(!ok())return;                                      // đổi mã / nối lại giữa chừng: bỏ, lần sau tải lại từ đầu
+      fpStart=Math.floor(lo/1000);FPV++;FPH++;fpCov=null;dirty=true;isFirst=false;
+      hi=lo;span=Math.min(span*2,6*3600e3);
+      if(lo<=lo0)break;
+    }
+    if(first)fpLast=Math.floor(now/1000);
     status(m1.length+" nến M1 · cTrader","ok");
   }catch(e){fpRetry=Date.now()+10000;status("Lỗi tải tick footprint: "+why(e),"bad")}
   finally{fpBusy=false}
+}
+/* Tick nặng hơn nến nhiều, nên có trần an toàn: không tải quá FP_MAXD ngày gần nhất dù kéo chart xa tới đâu. */
+const FP_MAXD=14;
+const fpCap=()=>Math.floor((Date.now()-FP_MAXD*86400e3)/6e4)*6e4;
+// mốc (ms UTC) cũ nhất cần có tick = nến trái nhất đang nhìn thấy (m1/agg là giờ server nên đổi lại UTC bằng s2u)
+function fpNeed(){
+  const lr=chart.timeScale().getVisibleLogicalRange(),b=agg.length?agg[Math.min(agg.length-1,lr?Math.max(0,Math.floor(lr.from)):0)]:null;
+  return b?Math.max(fpCap(),s2u(b.st)*1000):Date.now();
 }
 setInterval(fpSync,2000);
 /* Gom số liệu footprint của 1 nến: lv = Map(hàng -> [bán,mua]), POC, POC delta, Value Area (phương pháp CME), Imbalance chéo + Stacked.

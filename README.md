@@ -38,7 +38,7 @@ js/
 
 ## Dữ liệu lấy như thế nào
 
-- **Nến M1**: `ProtoOAGetTrendbarsReq`, tải mới -> cũ theo cửa sổ, số ngày chỉnh ở tab Kết nối. Nến live: `ProtoOASubscribeLiveTrendbarReq` (nếu server không gửi thì app tự dựng nến từ bid).
+- **Nến M1**: `ProtoOAGetTrendbarsReq`, tải THEO NHU CẦU: mở chart chỉ tải ~1 ngày gần nhất, kéo chart sang trái tới đâu thì tự tải thêm nến cũ tới đó (không còn ô "số ngày"). Nến live: `ProtoOASubscribeLiveTrendbarReq` (nếu server không gửi thì app tự dựng nến từ bid).
 - **Giá Bid/Ask live**: `ProtoOASubscribeSpotsReq`.
 - **Footprint / Big Trade / Statistic**: `ProtoOAGetTickDataReq` (tick bid + ask). cTrader (forex/CFD) không có tape giao dịch thật nên đây là **ước lượng** từ chuỗi báo giá, theo quy tắc cố định, dùng chung cho lịch sử và live (xem comment đầu phần footprint trong `ctrader.js`):
   1. Mỗi lần bid hoặc ask đổi = 1 đơn vị khối lượng (tick volume). Báo giá không đổi hoặc lỗi (ask < bid) bị bỏ.
@@ -49,12 +49,13 @@ js/
   6. Gộp hàng giá bằng số nguyên (đơn vị 1/100000): hàng q phủ `[q×bước, (q+1)×bước)`, không sai số số thực ở biên hàng (`fpQ` trong `orderflow-footprint.js`).
   7. POC hòa thì lấy hàng gần giữa nến; Value Area theo phương pháp CME (so tổng 2 hàng trên với 2 hàng dưới); Imbalance chéo kèm lọc volume tối thiểu và Stacked imbalance.
   Nếu broker không lưu đủ tick lịch sử, góc chart sẽ báo % số phút có dữ liệu.
-- Giới hạn của cTrader: 5 request lịch sử / giây (app tự giãn nhịp), lịch sử tick chỉ có trong một số ngày gần đây tuỳ broker. Số ngày footprint chỉnh trong cài đặt indicator (mặc định 2 ngày).
+- **Volume Profile**: tổng volume mỗi phút lấy từ tick volume của nến M1. Phân bổ vào từng mức giá: (1) theo footprint thật từ tick nếu phút đó đã được tải (bật Footprint / Big Trade / Statistic), giá mua quy về hệ Bid bằng spread trung bình của phút; (2) nếu không có tick thì theo đường đi của giá trong nến (tăng O→L→H→C, giảm O→H→L→C), đoạn lên là Ask, đoạn xuống là Bid. Hàng giá tính bằng số nguyên, POC hòa thì lấy hàng gần giữa, Value Area theo CME. Góc profile ghi nguồn dữ liệu (Tick xx% / M1).
+- Giới hạn của cTrader: 5 request lịch sử / giây (app tự giãn nhịp), lịch sử tick chỉ có trong một số ngày gần đây tuỳ broker. Tick footprint cũng tải theo vùng đang xem (kéo chart tới đâu tải tới đó), có trần an toàn 14 ngày gần nhất (`FP_MAXD` trong `orderflow-footprint.js`) vì tick rất nặng.
 - Không còn lưu trữ D1/R2: mỗi lần mở trang sẽ tải lại từ cTrader.
 
 ## Khi sửa file về sau
 
-- Sau mỗi lần sửa, đổi `?v=12` thành `?v=13` trong `index.html` để trình duyệt tải lại file mới.
+- Sau mỗi lần sửa, đổi `?v=14` thành `?v=15` trong `index.html` để trình duyệt tải lại file mới.
 - **Không đổi thứ tự** các dòng `<script>` (các file dùng chung biến toàn cục).
 - Tránh đặt tên biến trùng với tên đã có ở file khác (hai file khai báo cùng một `const` sẽ làm file sau không chạy).
 

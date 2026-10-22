@@ -11,10 +11,13 @@ function load(){
   const f=fs.readFileSync(J+'orderflow-footprint.js','utf8');
   const a=f.indexOf('/* Gộp hàng giá'),b=f.indexOf('async function fpSync');
   const c=f.indexOf('/* Gom số liệu footprint'),d=f.indexOf('function drawFP(');
+  const vp=fs.readFileSync(J+'volume-profile.js','utf8');
+  ctx.pd=()=>2;
   const bt=fs.readFileSync(J+'orderflow-bigtrade.js','utf8');
   ctx.IND={bt:{p:[['step','',0.5],['bm','','run'],['fm','','auto'],['lv','','med'],['mn','',15],['mx','',0],['cap','',2]]}};
   ctx.pdef=d=>Object.fromEntries(d.p.map(x=>[x[0],x[2]]));
   vm.runInContext('var FPV=0;',ctx);
+  vm.runInContext(vp.slice(vp.indexOf('const VPC='),vp.indexOf('function vpRanges(')).replace(/^const /gm,'var '),ctx);
   vm.runInContext(bt.slice(bt.indexOf('let BTS=null;'),bt.indexOf('function drawBT(')).replace(/^let /gm,'var '),ctx);
   vm.runInContext('var FPH=0,FPLV=0,fpStart=0,fpCov=null;'+f.slice(a,b).replace(/^const /gm,'var ')+f.slice(c,d).replace(/^const /gm,'var '),ctx);
   return ctx;
@@ -201,6 +204,60 @@ T('Big Trade: chế độ lvl gộp theo mức giá trong phút, buy ở ask / s
   const S=X.btPrep({p:{bm:'lvl',fm:'man',mn:10,mx:0,cap:0}});
   const o=X.btOf({st:0},S);const byS=Object.fromEntries(o.map(x=>[x.side,x.v]));
   assert.strictEqual(byS[1],35);assert.strictEqual(byS[-1],37);
+});
+
+// ===== Volume Profile =====
+const sum=a=>{let q=0;for(const v of a)q+=v;return q};
+function vpSetup(bars,fpm){X.m1.length=0;bars.forEach(b=>X.m1.push(b));X.FPM.clear();(fpm||[]).forEach(([t,rows,sp])=>{rows.sp=sp||0;X.FPM.set(t,rows)});X.VPC.clear()}
+T('VP: tổng volume được bảo toàn (mô hình đường đi) và Ask+Bid = Volume',()=>{
+  const bars=[];let p=2000;for(let i=0;i<300;i++){const o=p,c=o+((i*37)%11-5)*.07,h=Math.max(o,c)+((i*13)%5)*.05,l=Math.min(o,c)-((i*7)%4)*.05;bars.push([i*60,o,h,l,c,10+(i%17)]);p=c}
+  vpSetup(bars);const P=X.vpCalc({id:'a',mt:0},0,300*60);
+  const tot=bars.reduce((q,b)=>q+b[5],0);
+  assert.ok(Math.abs(sum(P.vol)-tot)<1e-6,sum(P.vol)+' vs '+tot);
+  for(let j=0;j<P.n;j++)assert.ok(Math.abs(P.ask[j]+P.bid[j]-P.vol[j])<1e-9);
+  assert.strictEqual(P.cov,0);
+});
+T('VP: nến tăng đi O→L→H→C: đoạn lên là Ask, đoạn xuống là Bid, đúng khối lượng',()=>{
+  // O=100 L=98 H=104 C=103 (đơn vị giá), hàng 1.0 => đường đi: xuống 2, lên 6, xuống 1; T=9; V=90 => bid=30, ask=60
+  vpSetup([[0,100,104,98,103,90]]);const P=X.vpCalc({id:'b',mt:100},0,60);   // mt=100 tick*0.01 = hàng 1.0
+  assert.strictEqual(P.bin,1);assert.ok(Math.abs(sum(P.ask)-60)<1e-9&&Math.abs(sum(P.bid)-30)<1e-9,'ask '+sum(P.ask)+' bid '+sum(P.bid));
+  const j=p=>Math.round(p-P.base);                       // hàng chứa giá p
+  const near=(x,y)=>Math.abs(x-y)<1e-9;
+  assert.ok(near(P.vol[j(98)],20)&&near(P.bid[j(98)],10)&&near(P.ask[j(98)],10));    // hàng 98: bán 10 (đoạn O→L) + mua 10 (đoạn L→H)
+  assert.ok(near(P.vol[j(100)],10)&&near(P.ask[j(100)],10)&&near(P.bid[j(100)],0));  // hàng 100: chỉ có đoạn lên
+  assert.ok(near(P.vol[j(103)],20)&&near(P.bid[j(103)],10));                        // hàng 103: mua 10 + bán 10 (đoạn H→C)
+});
+T('VP: nến giảm O→H→L→C và nến phẳng',()=>{
+  vpSetup([[0,100,104,98,99,100]]);let P=X.vpCalc({id:'c',mt:100},0,60);   // O→H: lên 4, H→L: xuống 6, L→C: lên 1; T=11
+  assert.ok(Math.abs(sum(P.ask)-100*5/11)<1e-9&&Math.abs(sum(P.bid)-100*6/11)<1e-9);
+  vpSetup([[0,100,100,100,100,40]]);P=X.vpCalc({id:'d',mt:100},0,60);assert.ok(Math.abs(sum(P.vol)-40)<1e-9&&Math.abs(sum(P.ask)-20)<1e-9);
+});
+T('VP: dùng tick thật, quy giá mua về hệ Bid, kẹp trong [low,high], co giãn theo volume M1',()=>{
+  // 1 phút, volume M1=200, tick: mua 30 ở ask 100.30, bán 10 ở bid 100.00; spread 0.30 => mua quy về 100.00
+  vpSetup([[0,100,100.5,99.8,100.2,200]],[[0,[[100.0,0,10],[100.3,30,0]],0.3]]);
+  const P=X.vpCalc({id:'e',mt:10},0,60);        // hàng 0.1
+  assert.ok(Math.abs(sum(P.vol)-200)<1e-9);assert.strictEqual(P.cov,1);
+  const j=p=>Math.floor(Math.round(p*1e5)/10000)-Math.floor(Math.round(99.8*1e5)/10000);
+  assert.ok(Math.abs(P.vol[j(100.0)]-200)<1e-9,'mua+bán cùng hàng 100.0: '+P.vol[j(100.0)]);
+  assert.ok(Math.abs(P.ask[j(100.0)]-150)<1e-9&&Math.abs(P.bid[j(100.0)]-50)<1e-9);   // 30:10 -> 150:50
+  // giá tick vượt high thì kẹp lại
+  vpSetup([[0,100,100.5,99.8,100.2,100]],[[0,[[101.0,5,0]],0]]);const Q2=X.vpCalc({id:'f',mt:10},0,60);
+  assert.ok(Math.abs(sum(Q2.vol)-100)<1e-9&&Q2.vol[Q2.n-1]>0);
+});
+T('VP: phút không có tick dùng mô hình đường đi, độ phủ tick đúng tỉ lệ',()=>{
+  vpSetup([[0,100,101,99,100.5,100],[60,100.5,101,100,100.2,300]],[[60,[[100.5,3,3]],0]]);
+  const P=X.vpCalc({id:'g',mt:10},0,120);assert.ok(Math.abs(P.cov-.75)<1e-9);assert.ok(Math.abs(sum(P.vol)-400)<1e-9);
+  const M=X.vpCalc({id:'h',mt:10,src:'m1'},0,120);assert.strictEqual(M.cov,0);
+});
+T('VP: POC hòa lấy hàng gần giữa, Value Area đủ phần trăm',()=>{
+  vpSetup([[0,100,100,100,100,50],[60,102,102,102,102,50],[120,104,104,104,104,50]]);
+  let P=X.vpCalc({id:'i',mt:100},0,180);assert.strictEqual(Math.round(P.base+P.poc*P.bin),102);
+  vpSetup([[0,100,100,100,100,5],[60,101,101,101,101,60],[120,102,102,102,102,20],[180,103,103,103,103,10],[240,104,104,104,104,5]]);
+  P=X.vpCalc({id:'j',mt:100},0,300);const S=X.vpDerive({vap:70},P);let s2=0;for(let i=S.vlo;i<=S.vhi;i++)s2+=P.vol[i];assert.ok(s2>=S.tot*.7);
+});
+T('VP: không sai biên hàng khi giá nằm đúng ranh giới (số nguyên)',()=>{
+  vpSetup([[0,0.7,0.7,0.7,0.7,10],[60,0.6,0.6,0.6,0.6,10]]);const P=X.vpCalc({id:'k',mt:10},0,120);
+  assert.strictEqual(P.n,2);assert.strictEqual(P.vol[0],10);assert.strictEqual(P.vol[1],10);   // 0.6 và 0.7 ở 2 hàng riêng, không lẫn
 });
 console.log('\n'+pass+' kiểm tra qua');
 })();

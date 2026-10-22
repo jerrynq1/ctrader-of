@@ -2,7 +2,7 @@ const $=id=>document.getElementById(id);
 const ld=(k,d)=>{try{return localStorage.getItem(k)??d}catch{return d}};
 const sv=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
 const TFS=[["M1",60],["M5",300],["M15",900],["M30",1800],["H1",3600],["H4",14400],["D1",86400],["W1",604800]];
-let C={days:+ld("tp_days",14),sym:ld("tp_sym","XAUUSD"),tf:+ld("tp_tf",900)};
+let C={sym:ld("tp_sym","XAUUSD"),tf:+ld("tp_tf",900)};
 let P={theme:ld("gx-theme","")||ld("tp_theme","")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"),sc:ld("tp_sc","")==="1"};
 
 /* ================= LỖI cTrader -> tiếng Việt (kết nối + dữ liệu nằm ở ctrader.js) ================= */

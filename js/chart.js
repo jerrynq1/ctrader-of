@@ -16,26 +16,31 @@ function themeChart(){
 }
 const vcol=(o,c)=>(c>=o?eff().up:eff().dn)+"55";
 function status(t,c){const e=$("st");e.textContent=t;e.className="pill "+(c||"")}
-/* Tải M1 theo từng cửa sổ thời gian, MỚI -> CŨ: cửa sổ đầu (1 ngày gần nhất) về là vẽ chart ngay,
-   các cửa sổ cũ hơn lần lượt được nối vào bên trái (1 ngày, 2 ngày, rồi 4 ngày/lần). Mốc thời gian ở đây là UTC (giây). */
+/* Tải M1 THEO NHU CẦU: mở chart chỉ tải ~1 ngày gần nhất, kéo chart sang trái tới đâu thì tải thêm nến cũ tới đó (fillLeft).
+   Mốc thời gian ở đây là UTC (giây). m1Old = mốc cũ nhất đã hỏi server; m1Span = độ dài lần tải kế (1 -> 2 -> 4 -> 8 ngày). */
+let fpKick=0,m1Old=0,m1Span=86400,m1Empty=0,m1NoMore=false,fillBusy=false,fillRetry=0;
+const M1_MAXSPAN=8*86400,M1_GIVEUP=30*86400;    // gặp liên tiếp 30 ngày không có nến thì coi như hết lịch sử
 async function loadM1(){
-  const g=++gen;loading=true;
-  const now=Math.floor(Date.now()/1000)+120,start=now-C.days*86400-172800;
-  let acc=[],hi=null,span=86400;
+  const g=++gen;loading=true;fillBusy=false;m1NoMore=false;m1Empty=0;m1Span=86400;fillRetry=0;
+  const now=Math.floor(Date.now()/1000)+120;
+  let acc=[];
   try{
     status("Đang kết nối cTrader…");
     try{await ctEnsure()}catch(e){if(g===gen)status("cTrader: "+why(e),"bad");return}
     if(g!==gen)return;
+    status("Đang tải M1…");
+    let top=now,empty=0;                                   // cuối tuần/ngày lễ có thể trống: lùi dần tới khi có nến
     for(;;){
-      status("Đang tải M1… "+acc.length+" nến");
-      const top=hi===null?now:hi,lo=Math.max(start,top-span);
-      const bars=await ctBars(lo,top);
+      const lo=top-m1Span,bars=await ctBars(lo,top);
       if(g!==gen)return;
-      if(bars.length){acc=bars.concat(acc);m1=acc;rebuild(false)}   // hiển thị ngay phần vừa tải, không đợi phần còn lại
-      hi=lo;span=Math.min(span*2,4*86400);
-      if(lo<=start)break;
+      m1Old=lo;
+      if(bars.length){acc=bars;break}
+      empty+=top-lo;top=lo;m1Span=Math.min(m1Span*2,4*86400);
+      if(empty>=M1_GIVEUP){m1NoMore=true;break}
     }
     if(!acc.length){m1=[];rebuild(true);status("Chưa có nến cho "+C.sym+" (kiểm tra tên mã đúng với broker, hoặc thị trường chưa có dữ liệu)","bad");return}
+    m1Span=Math.min(m1Span*2,M1_MAXSPAN);
+    m1=acc;rebuild(false);
     // bù các nến mới đóng trong lúc đang tải (poll() bị tạm dừng nối nến live khi loading) để không bị hở
     try{
       const bars=await ctBars(s2u(m1[m1.length-1][0]),Math.floor(Date.now()/1000)+120);
@@ -45,9 +50,42 @@ async function loadM1(){
       if(add)rebuild(false);
     }catch(e){}
     status(m1.length+" nến M1 · cTrader","ok");
-  }catch(e){status((acc.length?"Tải dở dang ("+acc.length+" nến) · lỗi: ":"Lỗi tải: ")+why(e),"bad")}
-  finally{if(g===gen)loading=false}
+  }catch(e){status((acc.length?"Tải dở dang ("+m1.length+" nến) · lỗi: ":"Lỗi tải: ")+why(e),"bad")}
+  finally{if(g===gen){loading=false;if(m1.length)fillLeft()}}
 }
+/* Nối thêm nến cũ vào bên trái khi người dùng kéo chart gần tới đầu dữ liệu (còn < 40 nến bên trái màn hình).
+   Giữ nguyên vị trí đang xem (bù số nến vừa thêm), nên chart không bị giật. */
+async function fillLeft(){
+  if(fillBusy||loading||m1NoMore||!m1.length||Date.now()<fillRetry)return;
+  const g=gen,ts=chart.timeScale();fillBusy=true;
+  try{
+    for(;;){
+      const r=ts.getVisibleLogicalRange();
+      if(!r||r.from>=40)break;
+      status("Đang tải thêm nến cũ… "+m1.length+" nến");
+      const top=m1Old,lo=top-m1Span,bars=await ctBars(lo,top);
+      if(g!==gen)return;
+      m1Old=lo;m1Span=Math.min(m1Span*2,M1_MAXSPAN);
+      if(bars.length){m1Empty=0;prependM1(bars)}
+      else{m1Empty+=top-lo;if(m1Empty>=M1_GIVEUP){m1NoMore=true;break}}
+    }
+    status(m1.length+" nến M1 · cTrader"+(m1NoMore?" · đã tới đầu lịch sử":""),"ok");
+  }catch(e){fillRetry=Date.now()+5000;status("Lỗi tải thêm nến cũ: "+why(e),"bad")}
+  finally{if(g===gen)fillBusy=false}
+}
+function prependM1(bars){
+  const ts=chart.timeScale(),r=ts.getVisibleLogicalRange(),n0=Math.max(0,Math.ceil(r?r.from:0)),t0=agg[n0]&&agg[n0].time;
+  m1=bars.concat(m1);rebuild(false);
+  if(!r||t0==null)return;
+  const i=agg.findIndex(b=>b.time===t0);if(i<0)return;
+  const d=i-n0,c=ts.getVisibleLogicalRange();                // giữ đúng các nến đang xem (chart có thể đã tự giữ, thì không làm gì)
+  if(d&&(!c||Math.abs(c.from-(r.from+d))>.5))try{ts.setVisibleLogicalRange({from:r.from+d,to:r.to+d})}catch{}
+}
+chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{
+  if(!r)return;
+  if(r.from<40)fillLeft();
+  clearTimeout(fpKick);fpKick=setTimeout(()=>{if(window.fpSync)fpSync()},400);   // footprint tick cũng tải thêm theo vùng đang xem
+});
 const bucket=(t,tf)=>tf===604800?Math.floor((t-345600)/604800)*604800+345600:Math.floor(t/tf)*tf;
 function rebuild(fit){
   const raw=[];let cur=null;
@@ -61,7 +99,7 @@ function rebuild(fit){
   for(const b of raw){b.time=disp(b.st);if(b.time>lastT){agg.push(b);lastT=b.time}}
   cs.setData(agg);
   vs.setData(agg.map(c=>({time:c.time,value:c.v,color:vcol(c.open,c.close)})));
-  if(fit)chart.timeScale().fitContent();
+  if(fit)chart.timeScale().scrollToRealTime();   // đổi khung giờ: về nến mới nhất (dữ liệu cũ hơn tự tải khi kéo sang trái)
   renderInd();
 }
 function applyLive(b){

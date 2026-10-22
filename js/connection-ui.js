@@ -1,6 +1,5 @@
 /* ================= KẾT NỐI cTrader ================= */
 $("cSave").onclick=async()=>{
-  C.days=Math.max(1,+$("cDays").value||14);sv("tp_days",C.days);
   sv("tp_ct",JSON.stringify({clientId:$("cId").value.trim(),clientSecret:$("cSec").value.trim(),accessToken:$("cTok").value.trim(),accountId:$("cAcc").value.trim(),env:$("cEnv").value}));
   $("cMsg").textContent="Đang kết nối...";ctClose();
   try{await ctEnsure();$("cMsg").textContent="Kết nối được (tài khoản "+CT.acc+", "+(CT.symbols||[]).length+" mã).";loadM1()}
@@ -18,7 +17,7 @@ function show(v){
   $("nav").innerHTML=V.map(([k,n])=>`<button class="sb${k===v?" on":""}" data-v="${k}" title="${n}"><span class="ic">${IC[k]}</span><span class="lb">${n}</span></button>`).join("");
   if(v==="ind")buildInd();
   if(v==="cs")buildCS();
-  if(v==="conn"){const g=ctCfg();$("cId").value=g.clientId;$("cSec").value=g.clientSecret;$("cTok").value=g.accessToken;$("cAcc").value=g.accountId||"";$("cEnv").value=g.env;$("cDays").value=C.days}
+  if(v==="conn"){const g=ctCfg();$("cId").value=g.clientId;$("cSec").value=g.clientSecret;$("cTok").value=g.accessToken;$("cAcc").value=g.accountId||"";$("cEnv").value=g.env}
   document.body.classList.remove("so");
 }
 $("nav").onclick=e=>{const b=e.target.closest("[data-v]");if(b)show(b.dataset.v)};

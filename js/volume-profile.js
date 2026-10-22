@@ -1,23 +1,51 @@
 /* ===== Volume Profile (kiểu Deep Profile) =====
-   Dữ liệu: tick volume của nến M1 (m1[i] = [thời gian, open, high, low, close, tickVolume]).
-   Mỗi nến M1 chia đều volume cho các mức giá nó đi qua; Ask/Bid (delta) là ước lượng theo vị trí giá đóng cửa trong nến.
-   Kích thước hàng gắn với GIÁ (không phụ thuộc zoom / kéo trục Y): tự động ≈ 70 hàng cho cả vùng giá của profile, hoặc cố định theo số tick. */
+   Tổng volume mỗi phút luôn lấy từ tick volume của nến M1 (m1[i] = [thời gian, open, high, low, close, tickVolume]); nguồn chỉ quyết định volume được PHÂN BỔ vào các mức giá thế nào:
+   1) Có dữ liệu tick của phút đó (Footprint / Big Trade / Statistic đang bật và đã tải): phân bổ theo footprint thật từ tick, mua/bán lấy từ phân loại tick.
+      Giá MUA (khớp ở Ask) được quy về hệ Bid bằng spread trung bình của phút, để cùng hệ giá với nến; giá luôn được kẹp trong [low, high] của nến.
+   2) Không có tick: mô hình đường đi của giá trong nến, nến tăng O→L→H→C, nến giảm O→H→L→C. Volume chia theo độ dài từng đoạn, mỗi đoạn trải đều theo
+      phần giao của nó với từng hàng; đoạn đi lên là Ask (mua), đoạn đi xuống là Bid (bán). Chính xác hơn cách chia đều theo số hàng và áp 1 tỉ lệ mua/bán chung cho mọi hàng.
+   Mọi phép tính hàng giá dùng SỐ NGUYÊN (1/100000) nên không sai số ở biên hàng. Kích thước hàng gắn với GIÁ (không phụ thuộc zoom / kéo trục Y): tự động ≈ 70 hàng cho cả vùng giá của profile, hoặc cố định theo số tick. */
 const VPC=new Map(),VPU={h:3600,d:86400,w:604800};
 const vpTick=()=>Math.pow(10,-pd());
 function vpCalc(d,t0,t1){
   const N=m1.length;if(!N)return null;
-  const mt=Math.round(+d.mt||0),sig=[t0,t1,N,m1[N-1][5],mt].join(),key=d.id+"|"+t0,c=VPC.get(key);if(c&&c.sig===sig)return c.P;
+  const mt=Math.round(+d.mt||0),src=d.src==="m1"?"m1":"auto",useTk=src==="auto"&&typeof FPM!=="undefined"&&FPM.size>0,lastT=m1[N-1][0];
+  const sig=[t0,t1,N,m1[N-1][5],mt,src,pd(),useTk?FPH:0,useTk&&t1>lastT?FPLV:0].join(),key=d.id+"|"+t0,c=VPC.get(key);if(c&&c.sig===sig)return c.P;
   let lo=0,hi=N;while(lo<hi){const m=(lo+hi)>>1;m1[m][0]<t0?lo=m+1:hi=m}
+  const U=1e5,I=x=>Math.round(x*U);
   let pmin=Infinity,pmax=-Infinity,cnt=0,i;
-  for(i=lo;i<N&&m1[i][0]<t1;i++){const x=m1[i];if(x[3]<pmin)pmin=x[3];if(x[2]>pmax)pmax=x[2];cnt++}
+  for(i=lo;i<N&&m1[i][0]<t1;i++){const x=m1[i],l=I(x[3]),h=I(x[2]);if(l<pmin)pmin=l;if(h>pmax)pmax=h;cnt++}
   if(!cnt){VPC.set(key,{sig,P:null});return null}
   const tk=vpTick();let k=mt;
-  if(k<1){const want=Math.max(1,(pmax-pmin)/tk/70),p10=Math.pow(10,Math.floor(Math.log10(want))),m=want/p10;k=(m<=1?1:m<=2?2:m<=5?5:10)*p10}
-  let b=+(tk*k).toFixed(pd()+3),nL=Math.floor((pmax-pmin)/b+1e-9)+1;if(nL>3000){b=b*Math.ceil(nL/3000);nL=Math.floor((pmax-pmin)/b+1e-9)+1}
-  const base=Math.floor(pmin/b+1e-9)*b,vol=new Float64Array(nL),ask=new Float64Array(nL),bid=new Float64Array(nL);let poc=0,pocV=-1;
-  for(i=lo;i<N&&m1[i][0]<t1;i++){const x=m1[i],v=x[5],h=x[2],l=x[3],f=h>l?(x[4]-l)/(h-l):(x[4]>x[1]?1:x[4]<x[1]?0:.5),j0=Math.floor((l-base)/b+1e-9),j1=Math.min(nL-1,Math.floor((h-base)/b+1e-9)),sh=v/(j1-j0+1);
-    for(let j=Math.max(0,j0);j<=j1;j++){vol[j]+=sh;ask[j]+=sh*f;bid[j]+=sh*(1-f);if(vol[j]>pocV){pocV=vol[j];poc=j}}}
-  const P={base,bin:b,n:nL,vol,ask,bid,poc};VPC.set(key,{sig,P});if(VPC.size>400)VPC.delete(VPC.keys().next().value);return P}
+  if(k<1){const want=Math.max(1,(pmax-pmin)/U/tk/70),p10=Math.pow(10,Math.floor(Math.log10(want))),m=want/p10;k=(m<=1?1:m<=2?2:m<=5?5:10)*p10}
+  let bI=Math.max(1,Math.round(tk*k*U)),bi0=Math.floor(pmin/bI),nL=Math.floor(pmax/bI)-bi0+1;
+  if(nL>3000){bI*=Math.ceil(nL/3000);bi0=Math.floor(pmin/bI);nL=Math.floor(pmax/bI)-bi0+1}
+  const vol=new Float64Array(nL),ask=new Float64Array(nL),bid=new Float64Array(nL),clamp=(x,a,b)=>x<a?a:x>b?b:x,row=p=>Math.floor(p/bI)-bi0;
+  const point=(p,v,fa)=>{const j=row(p);vol[j]+=v;ask[j]+=v*fa;bid[j]+=v*(1-fa)};
+  // trải v đều dọc đoạn giá [pa,pb] theo độ dài giao với từng hàng; đoạn đi lên = Ask, đi xuống = Bid
+  const seg=(pa,pb,v)=>{const a=Math.min(pa,pb),b=Math.max(pa,pb),len=b-a,up=pb>pa,j0=Math.floor(a/bI),j1=Math.ceil(b/bI)-1;
+    for(let j=j0;j<=j1;j++){const r0=j*bI,ov=Math.min(b,r0+bI)-Math.max(a,r0);if(ov<=0)continue;const q=v*ov/len,jj=j-bi0;vol[jj]+=q;(up?ask:bid)[jj]+=q}};
+  let totV=0,tkV=0;
+  for(i=lo;i<N&&m1[i][0]<t1;i++){
+    const x=m1[i],V=x[5]>0?x[5]:0,L=I(x[3]),H=I(x[2]),O=I(x[1]),Cl=I(x[4]),rows=useTk?FPM.get(x[0]):null;let Tm=0;
+    if(rows)for(const r of rows)Tm+=r[1]+r[2];
+    if(rows&&Tm>0){
+      const W=V>0?V:Tm,sc=W/Tm,sp=rows.sp||0;
+      for(const r of rows){
+        if(r[1]>0){const j=row(clamp(I(r[0]-sp),L,H)),q=r[1]*sc;vol[j]+=q;ask[j]+=q}
+        if(r[2]>0){const j=row(clamp(I(r[0]),L,H)),q=r[2]*sc;vol[j]+=q;bid[j]+=q}
+      }
+      totV+=W;tkV+=W;continue;
+    }
+    if(!(V>0))continue;totV+=V;
+    const pts=Cl>=O?[O,L,H,Cl]:[O,H,L,Cl],ln=[Math.abs(pts[1]-pts[0]),Math.abs(pts[2]-pts[1]),Math.abs(pts[3]-pts[2])],T=ln[0]+ln[1]+ln[2];
+    if(T===0){point(O,V,.5);continue}
+    for(let q=0;q<3;q++)if(ln[q]>0)seg(pts[q],pts[q+1],V*ln[q]/T);
+  }
+  // POC: hàng volume lớn nhất; nếu bằng nhau thì lấy hàng gần giữa vùng giá nhất
+  let poc=0,pocV=-1;const mid=(nL-1)/2;
+  for(let j=0;j<nL;j++){const v=vol[j];if(v>pocV+1e-9||(v>pocV-1e-9&&Math.abs(j-mid)<Math.abs(poc-mid))){pocV=v;poc=j}}
+  const P={base:bi0*bI/U,bin:bI/U,n:nL,vol,ask,bid,poc,cov:totV>0?tkV/totV:0};VPC.set(key,{sig,P});if(VPC.size>400)VPC.delete(VPC.keys().next().value);return P}
 function vpDerive(d,P){
   const v=P.vol,n=P.n;let tot=0,mx=0,mxD=0;
   for(let i=0;i<n;i++){tot+=v[i];if(v[i]>mx)mx=v[i];const q=Math.abs(P.ask[i]-P.bid[i]);if(q>mxD)mxD=q}
@@ -60,6 +88,7 @@ function drawVP(d){
     const Yp=p=>ya+(p-pa)*(yb-ya)/(pb-pa),maxW=fw*wp,dir=sd==="r"?-1:1,ax=sd==="r"?fx1:fx0,cx=ax+dir*maxW/2,half=maxW/2;
     const rowH=Math.abs(Yp(pa+P.bin)-Yp(pa)),gap=rowH>4?1:0,yTop=Math.min(ya,yb),yBot=Math.max(ya,yb);
     ext(fx0,yTop,fx1,yBot);
+    if(g("cv",true)){ctx.save();ctx.font=font(10);ctx.textAlign="left";ctx.fillStyle=hexA(ink(),.55);ctx.fillText(d.src==="m1"||P.cov<=0?"M1":P.cov>=.995?"Tick":"Tick "+Math.round(P.cov*100)+"%",fx0+4,Math.max(yTop,0)+8);ctx.restore()}
     const yVAH=Yp(pa+(S.vhi+1)*P.bin),yVAL=Yp(pa+S.vlo*P.bin);
     if(ve){ctx.fillStyle=hexA(vc,.07);ctx.fillRect(fx0,Math.min(yVAH,yVAL),fw,Math.abs(yVAL-yVAH))}
     if(r.fr&&d===sel){ctx.strokeStyle="rgba(152,162,216,.6)";ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.strokeRect(fx0,yTop,fw,yBot-yTop);ctx.setLineDash([])}
@@ -87,12 +116,13 @@ function drawVP(d){
   if(per==="custom"&&d===sel&&!d.lk)hnd(d).forEach(h=>{ctx.setLineDash([]);ctx.lineWidth=1.5;ctx.fillStyle="#fff";ctx.strokeStyle="#2962ff";ctx.beginPath();ctx.arc(h[0],h[1],tl>1?8:5,0,7);ctx.fill();ctx.stroke()})}
 /* cài đặt Volume Profile: chỉ 2 tab (Profile / Kiểu dáng) + khung thời gian hiển thị */
 function vpTab(tab,d,h){const{R,CX,CB,SE,NU,OP}=h,side=!d.per||d.per==="custom"||d.per==="multi",legacy=!!d.per&&d.per!=="custom";
-  if(tab==="g")return`<p class="msg" style="margin:0 0 6px">Dùng tick volume của nến M1. Ask/Bid và Delta là ước lượng theo vị trí giá đóng cửa trong mỗi nến.</p>`+
+  if(tab==="g")return`<p class="msg" style="margin:0 0 6px">Tổng volume lấy từ tick volume của nến M1. Phân bổ vào từng mức giá theo tick thật nếu có (bật Footprint, Big Trade hoặc Statistic để tải tick), nếu không thì theo đường đi của giá trong nến. Ask/Bid và Delta là ước lượng.</p>`+
+    R("Nguồn phân bổ volume",SE("src",[["auto","Tự động (tick nếu có)"],["m1","Chỉ nến M1"]],"auto"))+
     R("Loại profile",SE("ty",[["vol","Volume"],["ab","Ask / Bid"],["dl","Delta"],["dv","Delta + Volume"]],"vol"))+
     (legacy?R("Phạm vi",SE("per",[["custom","Vùng đã vẽ"],["visible","Đang hiển thị"],["comp","Toàn bộ dữ liệu"],["latest","Chu kỳ mới nhất"],["multi","Mỗi chu kỳ một profile"]],"custom")):"")+
     (legacy&&["latest","multi"].includes(d.per)?R("Chu kỳ",NU("ln",1)+SE("lu",[["h","Giờ"],["d","Ngày"],["w","Tuần"]],"d")):"")+
     R("Số tick mỗi hàng (0 = tự động)",NU("mt",0))+R("Value Area (%)",NU("vap",70));
-  if(tab==="s")return CX("pe","Đường POC",true,CB("pc","#ffb02e"))+CX("ve","Value Area + VAH / VAL",true,CB("vc","#35b6ff"))+CX("hv","Đánh dấu HVN",true,CB("hc","#b388ff"))+CX("lv","Đánh dấu LVN",true,CB("lc","#ffd24a"))+CX("nm","Hiện số trên thanh",false)+
+  if(tab==="s")return CX("pe","Đường POC",true,CB("pc","#ffb02e"))+CX("ve","Value Area + VAH / VAL",true,CB("vc","#35b6ff"))+CX("hv","Đánh dấu HVN",true,CB("hc","#b388ff"))+CX("lv","Đánh dấu LVN",true,CB("lc","#ffd24a"))+CX("nm","Hiện số trên thanh",false)+CX("cv","Hiện nguồn dữ liệu (Tick / M1)",true)+
     R("Bề rộng (% vùng)",`<input type="range" data-f="wp" min="10" max="100" value="${Math.round((d.wp==null?(side?.7:.3):d.wp)*100)}">`)+
     R("Vị trí",SE("sd",[["l","Bám trái"],["r","Bám phải"]],side?"l":"r"))+
     R("Màu thanh",CB("c1","#98a2d8"))+R("Màu mua / bán",CB("ca",COL().up)+CB("cb",COL().dn))+R("Độ phủ",OP("fo",.6));

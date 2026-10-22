@@ -169,7 +169,8 @@ function fpStep(st,bid,ask){
   st.bid=bid;st.ask=ask;if(side)st.side=side;return side;
 }
 const fpAdd=(map,p,side)=>{let e=map.get(p);if(!e){e=[0,0];map.set(p,e)}side>0?e[0]++:e[1]++};
-const fpRows=map=>[...map].sort((a,b)=>a[0]-b[0]).map(([p,e])=>[px5(p),e[0],e[1]]);
+// rows.sp = spread trung bình của phút (đơn vị giá), để quy giá MUA (đặt ở Ask) về cùng hệ Bid với nến (Volume Profile dùng)
+const fpRows=map=>{const r=[...map].sort((a,b)=>a[0]-b[0]).map(([p,e])=>[px5(p),e[0],e[1]]);r.sp=map.sn?map.sp/map.sn/1e5:0;return r};
 const fpOk=(b,a)=>b>0&&a>0&&a>=b;
 // chuỗi tick cùng chiều (Big Trade). emit(run) được gọi khi chuỗi kết thúc.
 function btFeed(st,ts,side,pr,emit){
@@ -186,7 +187,7 @@ const btEmitLive=r=>{btEmit(r,BTE);FPL.dirty=true};
 // ghi 1 sự kiện (đã hợp lệ) vào phút tương ứng. Trả true nếu có cộng khối lượng
 function fpCount(st,ts,b,a,mapOf,emit){
   const side=fpStep(st,b,a);if(!side)return false;
-  const pr=side>0?a:b;fpAdd(mapOf(Math.floor(ts/60000)*60),pr,side);btFeed(st,ts,side,pr,emit);return true;
+  const pr=side>0?a:b,mp=mapOf(Math.floor(ts/60000)*60);fpAdd(mp,pr,side);mp.sp=(mp.sp||0)+(a-b);mp.sn=(mp.sn||0)+1;btFeed(st,ts,side,pr,emit);return true;
 }
 function ctFpFlush(){if(FPL.map&&FPL.min)FPM.set(u2s(FPL.min),fpRows(FPL.map))}
 // --- live: gộp các sự kiện cùng mili-giây rồi mới tính ---
