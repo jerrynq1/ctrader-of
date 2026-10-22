@@ -1,25 +1,30 @@
 /* ===== Orderflow: Footprint (indicator "fpr") ===== */
-const FPM=new Map();let FPV=0,fpSym="",fpLast=0,fpBusy=false,fpDays=0,fpEpoch=0,fpRetry=0;
+const FPM=new Map();let FPV=0,FPH=0,FPLV=0,fpSym="",fpLast=0,fpBusy=false,fpDays=0,fpEpoch=0,fpRetry=0,fpStart=0,fpCov=null,fpGap=0;
+/* Gộp hàng giá bằng SỐ NGUYÊN (đơn vị 1/100000) để không bị sai số số thực ở biên hàng: hàng q phủ khoảng giá [q*step, (q+1)*step). Dùng chung cho Footprint / Big Trade / Statistic. */
+const FPU=1e5,fpSI=step=>Math.max(1,Math.round(step*FPU));
+const fpQ=(p,step)=>Math.floor(Math.round(p*FPU)/fpSI(step));      // chỉ số hàng chứa giá p
+const fpYp=(q,step)=>(q+.5)*fpSI(step)/FPU;                         // giá ở tâm hàng q (để vẽ)
 const fpOn=()=>ACT.find(x=>x.key==="fpr"&&isOn(x)),btOn=()=>ACT.find(x=>x.key==="bt"&&isOn(x));
 const fpRgb=h=>{const m=/^#?([0-9a-f]{6})$/i.exec(h||"");const n=m?parseInt(m[1],16):8421504;return(n>>16)+","+((n>>8)&255)+","+(n&255)};
 const fpFm=v=>{const a=Math.abs(v);return(v<0?"-":"")+(a>=1e4?(a/1e3).toFixed(1)+"K":Math.round(a))};
+const btGap=()=>{const b=btOn();return b?Math.max(50,Math.min(5000,Math.round(+b.p.gap)||300)):300};   // khoảng nghỉ tối đa (ms) giữa 2 tick của 1 chuỗi Big Trade
 const fpDy=()=>{const fa=fpOn(),ba=btOn(),sa=stOn();return Math.max(fa?fa.p.days:0,ba?ba.p.days:0,sa?sa.p.days:0)};
 async function fpSync(){
-  const a=fpOn()||btOn()||stOn();if(!a||fpBusy||!ctReady()||!m1.length||Date.now()<fpRetry)return;fpBusy=true;const dy=fpDy();
+  const a=fpOn()||btOn()||stOn();if(!a||fpBusy||!ctReady()||!m1.length||Date.now()<fpRetry)return;fpBusy=true;const dy=fpDy(),gp=btGap();
   try{
-    if(fpSym!==C.sym||fpDays!==dy||fpEpoch!==CT.epoch){FPM.clear();fpSym=C.sym;fpDays=dy;fpEpoch=CT.epoch;fpLast=0;ctFpReset()}
+    if(fpSym!==C.sym||fpDays!==dy||fpEpoch!==CT.epoch||fpGap!==gp){FPM.clear();BTE.clear();fpSym=C.sym;fpDays=dy;fpEpoch=CT.epoch;fpGap=gp;BTG.gap=gp;fpLast=0;fpCov=null;FPH++;ctFpReset()}
     if(fpLast)return;                       // đã tải xong: phần live do ctrader.js tự cộng dồn từ tick (poll() đẩy vào FPM)
     /* Lần tải đầu: tick lịch sử theo từng cửa sổ MỚI -> CŨ (3 giờ, 6 giờ, 12 giờ, rồi 1 ngày/lần). Cửa sổ nào về là vẽ footprint ngay (FPV++).
        Cửa sổ mới nhất kết thúc ở "bây giờ" và chuyển sang chế độ live (nối tiếp từ tick cuối, không trùng, không hở). */
-    const now=Date.now(),start=Math.floor((now-dy*86400e3)/6e4)*6e4,ok=()=>C.sym===fpSym&&fpDy()===fpDays&&fpEpoch===CT.epoch&&ctReady();
-    let hi=now,span=3*3600e3,first=true;
+    const now=Date.now(),start=Math.floor((now-dy*86400e3)/6e4)*6e4,ok=()=>C.sym===fpSym&&fpDy()===fpDays&&fpEpoch===CT.epoch&&btGap()===fpGap&&ctReady();
+    fpStart=Math.floor(start/1000);let hi=now,span=2*3600e3,first=true;
     status("Đang tải tick footprint…","");
     for(;;){
       const lo=Math.max(start,Math.floor((hi-span)/6e4)*6e4);
       await ctFpWindow(lo,first?hi:hi-1,first);
       if(!ok())return;                                       // đổi mã / đổi số ngày / nối lại giữa chừng: bỏ, lần sau tải lại từ đầu
-      FPV++;dirty=true;first=false;
-      hi=lo;span=Math.min(span*2,86400e3);
+      FPV++;FPH++;fpCov=null;dirty=true;first=false;
+      hi=lo;span=Math.min(span*2,6*3600e3);
       if(lo<=start)break;
     }
     fpLast=Math.floor(now/1000);
@@ -28,16 +33,50 @@ async function fpSync(){
   finally{fpBusy=false}
 }
 setInterval(fpSync,2000);
-function fpCandle(c,step,vap){
-  const key=step+"|"+FPV+"|"+vap;if(c._fk===key)return c._fl;
+/* Gom số liệu footprint của 1 nến: lv = Map(hàng -> [bán,mua]), POC, POC delta, Value Area (phương pháp CME), Imbalance chéo + Stacked.
+   Cache theo phiên bản dữ liệu: nến cũ chỉ tính lại khi nạp thêm lịch sử (FPH) hoặc đổi cài đặt; chỉ nến cuối mới tính lại theo từng tick live (FPLV). */
+function fpCandle(c,step,Q){
+  const vap=Q.vap,ratio=Q.ratio,imv=Math.max(0,+Q.imv||0),stk=Math.max(0,Math.round(+Q.stk||0));
+  const last=agg.length&&c===agg[agg.length-1],key=[step,FPH,vap,ratio,imv,stk,last?FPLV:0].join("|");if(c._fk===key)return c._fl;
   const lv=new Map();let tot=0;
-  for(let t=c.st;t<c.st+C.tf;t+=60){const r=FPM.get(t);if(!r)continue;for(const [p,b,s] of r){const q=Math.round(p/step);let e=lv.get(q);if(!e){e=[0,0];lv.set(q,e)}e[0]+=s;e[1]+=b}}
-  let lo=1e12,hi=-1e12,mxs=1,mxt=1,mxd=1,poc=null,pm=-1,dpoc=null,dm=-1;
-  for(const [q,e] of lv){lo=Math.min(lo,q);hi=Math.max(hi,q);const t=e[0]+e[1],d=Math.abs(e[1]-e[0]);tot+=t;mxs=Math.max(mxs,e[0],e[1]);mxt=Math.max(mxt,t);mxd=Math.max(mxd,d);if(t>pm){pm=t;poc=q}if(d>dm){dm=d;dpoc=q}}
+  for(let t=c.st;t<c.st+C.tf;t+=60){const r=FPM.get(t);if(!r)continue;for(const [p,b,s] of r){const q=fpQ(p,step);let e=lv.get(q);if(!e){e=[0,0];lv.set(q,e)}e[0]+=s;e[1]+=b}}
+  let lo=1e12,hi=-1e12,mxs=1,mxt=1,mxd=1;
+  for(const [q,e] of lv){if(q<lo)lo=q;if(q>hi)hi=q;const t=e[0]+e[1],d=Math.abs(e[1]-e[0]);tot+=t;mxs=Math.max(mxs,e[0],e[1]);mxt=Math.max(mxt,t);mxd=Math.max(mxd,d)}
+  // POC: hàng volume lớn nhất; nếu bằng nhau thì lấy hàng gần giữa nến nhất (không thiên về hàng thấp nhất). POC delta tương tự theo |delta|
+  const mid=(fpQ(c.high,step)+fpQ(c.low,step))/2;let poc=null,pm=-1,dpoc=null,dm=-1;
+  for(const [q,e] of lv){const t=e[0]+e[1],d=Math.abs(e[1]-e[0]);
+    if(t>pm||(t===pm&&Math.abs(q-mid)<Math.abs(poc-mid))){pm=t;poc=q}
+    if(d>dm||(d===dm&&Math.abs(q-mid)<Math.abs(dpoc-mid))){dm=d;dpoc=q}}
+  // Value Area theo CME: từ POC, mỗi bước so tổng 2 hàng phía trên với tổng 2 hàng phía dưới, thêm bên lớn hơn, đến khi đủ vap% tổng volume
   let vl=poc,vh=poc;
-  if(poc!=null){const g=q=>{const e=lv.get(q);return e?e[0]+e[1]:0};let sm=g(poc);
-    while(sm<tot*vap/100&&(vl>lo||vh<hi)){const u=vh<hi?g(vh+1):-1,d=vl>lo?g(vl-1):-1;if(u>=d){vh++;sm+=Math.max(0,u)}else{vl--;sm+=Math.max(0,d)}}}
-  c._fk=key;return c._fl={lv,lo,hi,mxs,mxt,mxd,poc,dpoc,vl,vh};
+  if(poc!=null){
+    const g=q=>{const e=lv.get(q);return e?e[0]+e[1]:0};let sm=g(poc);const need=tot*vap/100;
+    while(sm<need&&(vl>lo||vh<hi)){
+      const nu=Math.min(2,hi-vh),nd=Math.min(2,vl-lo);let su=0,sd=0;
+      for(let k=1;k<=nu;k++)su+=g(vh+k);for(let k=1;k<=nd;k++)sd+=g(vl-k);
+      if(nu&&(su>=sd||!nd)){vh+=nu;sm+=su}else{vl-=nd;sm+=sd}
+    }
+  }
+  // Imbalance chéo: MUA tại hàng q so với BÁN tại hàng q-1; BÁN tại hàng q so với MUA tại hàng q+1. Cần ≥ ratio lần và ≥ imv volume.
+  // Stacked: từ stk hàng LIÊN TIẾP trở lên cùng một phía imbalance. imb: hàng -> [muaImb, bánImb, muaStacked, bánStacked]
+  const imb=new Map();
+  for(const [q,e] of lv){
+    const dn=lv.get(q-1),up=lv.get(q+1);
+    imb.set(q,[e[1]>0&&e[1]>=imv&&e[1]>=ratio*Math.max(dn?dn[0]:0,1),e[0]>0&&e[0]>=imv&&e[0]>=ratio*Math.max(up?up[1]:0,1),false,false]);
+  }
+  if(stk>1)for(const k of [0,1]){
+    let run=0;
+    const mark=(from,to)=>{if(to-from+1>=stk)for(let q=from;q<=to;q++)imb.get(q)[k+2]=true};
+    for(let q=lo;q<=hi+1;q++){const m=imb.get(q);if(m&&m[k]){if(!run)run=q;}else{if(run)mark(run,q-1);run=0}}
+  }
+  c._fk=key;return c._fl={lv,lo,hi,mxs,mxt,mxd,poc,dpoc,vl,vh,imb,tot};
+}
+/* Độ phủ dữ liệu: bao nhiêu % phút có nến M1 (có volume) trong khoảng đã chọn thì có số liệu footprint. Thấp = broker không lưu đủ tick lịch sử, hoặc tải bị cắt. */
+function fpCoverage(){
+  const key=FPH+"|"+FPLV+"|"+m1.length;if(fpCov&&fpCov.k===key)return fpCov;
+  let n=0,ok=0;
+  for(let i=m1.length-2;i>=0;i--){const x=m1[i];if(x[0]<fpStart)break;if(!(x[5]>0))continue;n++;if(FPM.has(x[0]))ok++}
+  return fpCov={k:key,n,ok,pct:n?ok/n*100:100};
 }
 function drawFP(w,h){
   const a=fpOn();let show=false;
@@ -62,14 +101,14 @@ function drawFP(w,h){
         if(yo==null||yc==null||yh==null||yl==null)continue;
         ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(cx,yh);ctx.lineTo(cx,yl);ctx.stroke();
         ctx.fillStyle=col;ctx.fillRect(x0,Math.min(yo,yc),bw,Math.max(1,Math.abs(yo-yc)));
-        const F=fpCandle(c,step,Q.vap);if(!F.lv.size)continue;
+        const F=fpCandle(c,step,Q);if(!F.lv.size)continue;
         const ln=two?fm(F.mxs).length:ty==="vol"?fm(F.mxt).length:ty==="dl"?fm(F.mxd).length+1:Math.max(fm(F.mxd).length+1,fm(F.mxt).length),fit=((two||ty==="dv")?hw-3:cwid-4)/(ln*.62),tOK=txt&&fit>=6.5,fz=Math.min(fs,fit);
         for(let q=F.lo;q<=F.hi;q++){
-          const y=cs.priceToCoordinate(q*step);if(y==null||y<-rh||y>h+rh)continue;
+          const y=cs.priceToCoordinate(fpYp(q,step));if(y==null||y<-rh||y>h+rh)continue;
           const e=F.lv.get(q),yt=y-rh/2+.5,hg=Math.max(1,rh-1);
           if(!e){if(tOK&&Q.zero){ctx.globalAlpha=.45;ctx.fillStyle=tx;ctx.font=fz+"px "+mono;ctx.textAlign="center";ctx.fillText("0",xs+hw,y+1);ctx.globalAlpha=1}continue}
           const s=e[0],b=e[1],t=s+b,d=b-s,dim=(!Q.va||(q>=F.vl&&q<=F.vh))?1:(Q.vaout?.4:1);
-          const dn=F.lv.get(q-1),up=F.lv.get(q+1),bi=b>0&&b>=Q.ratio*Math.max(dn?dn[0]:0,1),si=s>0&&s>=Q.ratio*Math.max(up?up[1]:0,1);
+          const im=F.imb.get(q),bi=im[0],si=im[1];
           if(Q.cm!=="none"){
             const rc=(x,wd,cl,al)=>{if(wd<=0)return;ctx.fillStyle=`rgba(${cl},${Math.min(1,al*Q.op*dim)})`;ctx.fillRect(x,yt,wd,hg)};
             if(two){
@@ -85,6 +124,7 @@ function drawFP(w,h){
           if(Q.poc&&q===F.poc){ctx.strokeStyle=cP;ctx.lineWidth=1.5;ctx.strokeRect(xs+.5,yt,cwid-1,hg);ctx.lineWidth=1}
           if(Q.dpoc&&q===F.dpoc){ctx.strokeStyle=d>=0?cA:cB;ctx.lineWidth=1.5;ctx.strokeRect(xs+2,yt+1,cwid-4,Math.max(1,hg-2));ctx.lineWidth=1}
           if(Q.va&&Q.valn&&(q===F.vh||q===F.vl)){ctx.strokeStyle="#35b6ff";ctx.beginPath();const ly=q===F.vh?yt:yt+hg;ctx.moveTo(xs,ly);ctx.lineTo(xs+cwid,ly);ctx.stroke()}
+          if(Q.stk>1){ctx.fillStyle=`rgb(${A})`;if(im[2])ctx.fillRect(xs+cwid-2,yt,2,hg);ctx.fillStyle=`rgb(${B})`;if(im[3])ctx.fillRect(xs,yt,2,hg)}   // đánh dấu stacked imbalance ở mép ô
           if(!tOK)continue;
           const a2=Math.min(1,Math.max(s,b)/F.mxs),f2=Q.dyn?Math.min(rh-1,fit,fs*(.85+.5*a2)):fz;
           const T=(v,x,al,hl,cl)=>{ctx.textAlign=al;ctx.fillStyle=cl;ctx.font=(hl?"bold ":"")+f2+"px "+mono;ctx.fillText(v,x,y+1)};
@@ -99,7 +139,10 @@ function drawFP(w,h){
       }
     }
   }
-  if(a&&agg.length){const m=!FPM.size?(fpLast?dl("Footprint: chưa có dữ liệu tick (kiểm tra kết nối cTrader)","Footprint: no tick data yet (check the cTrader connection)","Footprint：暂无 tick 数据（请检查 cTrader 连接）"):""):(!show?dl("Footprint: zoom vào để thấy các ô","Footprint: zoom in to see the cells","Footprint：放大可查看格子"):"");
+  if(a&&agg.length){let m=!FPM.size?(fpLast?dl("Footprint: chưa có dữ liệu tick (kiểm tra kết nối cTrader)","Footprint: no tick data yet (check the cTrader connection)","Footprint：暂无 tick 数据（请检查 cTrader 连接）"):""):(!show?dl("Footprint: zoom vào để thấy các ô","Footprint: zoom in to see the cells","Footprint：放大可查看格子"):"");
+    if(!m&&show&&FPM.size){const cv=fpCoverage();if(cv.n>=5&&(cv.pct<97||FPD.trunc)){const pc=cv.pct.toFixed(0);
+      m=FPD.trunc?dl("Footprint: tải tick bị cắt dở, dữ liệu có thể thiếu (phủ "+pc+"% số phút)","Footprint: tick download was cut short, data may be incomplete ("+pc+"% of minutes covered)","Footprint：tick 下载被截断，数据可能不完整（覆盖 "+pc+"% 分钟）")
+        :dl("Footprint: có tick cho "+pc+"% số phút (broker chỉ lưu tick gần đây, giảm số ngày hoặc chấp nhận phần cũ thiếu)","Footprint: tick data for "+pc+"% of minutes (broker keeps only recent ticks)","Footprint：仅 "+pc+"% 分钟有 tick（经纪商只保留近期 tick）")}}
     if(m){ctx.save();ctx.textAlign="right";ctx.textBaseline="top";ctx.font="12px system-ui,sans-serif";ctx.globalAlpha=.6;ctx.fillStyle=ink();ctx.fillText(m,w-10,8);ctx.restore()}}
   if(show!==!!window.FPHIDE){window.FPHIDE=show;applyCand()}     // đang hiện ô thì làm trong suốt nến gốc
 }

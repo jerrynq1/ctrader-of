@@ -82,7 +82,8 @@ function poll(){
     $("bid").textContent=bid;$("ask").textContent=ask;if(window.baUpdate)baUpdate(C.sym,CT.bid/1e5,CT.ask/1e5);   // đường Bid/Ask trên chart
   }
   if(CT.barDirty&&CT.liveBar&&m1.length&&!loading){CT.barDirty=false;applyLive(CT.liveBar)}
-  if(FPL.dirty){FPL.dirty=false;ctFpFlush();FPV++;dirty=true}
+  ctFpIdle();
+  if(FPL.dirty){FPL.dirty=false;ctFpFlush();FPV++;FPLV++;dirty=true}
 }
 function buildTfs(){$("tfs").innerHTML=TFS.map(([n,s])=>`<button class="tf${s===C.tf?" on":""}" data-s="${s}">${n}</button>`).join("")}
 $("tfs").onclick=e=>{const b=e.target.closest("button");if(!b)return;C.tf=+b.dataset.s;sv("tp_tf",C.tf);buildTfs();rebuild(true)};

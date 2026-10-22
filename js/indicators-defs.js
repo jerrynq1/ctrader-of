@@ -64,7 +64,7 @@ function dCandles(A,keyFn,a,E,isUp){
   const up=cres(a,0,E),dn=cres(a,1,E);
   return[{k:"c",d:O.map((o,i)=>o==null?null:{v:La[i],o,h:H[i],l:Lo[i],col:isUp(La[i],o)?up:dn})}]}
 const IND={
- fpr:{n:"Footprint",t:"of",ver:2,d:"Khối lượng mua/bán tại từng mức giá trong mỗi nến. Zoom vào để thấy các ô. Với CFD là số ước lượng.",
+ fpr:{n:"Footprint",t:"of",ver:2,d:"Khối lượng mua/bán tại từng mức giá trong mỗi nến. Zoom vào để thấy các ô. Với CFD là số ước lượng từ chuỗi báo giá bid/ask (mua đặt ở Ask, bán đặt ở Bid).",
   p:[["ty","Kiểu","ab","s",{g:"Dữ liệu",mn:1,o:[["ab","Ask / Bid"],["vol","Volume"],["dl","Delta"],["dv","Delta + Volume"]]}],
      ["md","Chế độ","box","s",{o:[["box","Box"],["prof","Profile"]]}],
      ["step","Bước giá",0.5,"n",{mn:1,min:0.01,step:0.01,tt:"Gộp các mức giá thành từng hàng có độ cao này (đơn vị giá). Vàng thường dùng 0.5 hoặc 1."}],
@@ -73,6 +73,8 @@ const IND={
      ["zero","Hiện số 0",false,"b"],["dyn","Cỡ chữ động",false,"b"],
      ["days","Dữ liệu tải (ngày)",2,"i",{min:1,max:14}],
      ["ratio","Imbalance ≥",3,"n",{g:"Imbalance",mn:1,min:1.5,step:0.5,hp:["Imbalance là gì?", "Imbalance (mất cân bằng) là khi một bên mua hoặc bán áp đảo hẳn bên đối diện. Ở đây so theo đường chéo: Mua (Ask) ở một mức giá được so với Bán (Bid) ở mức giá thấp hơn 1 hàng; Bán ở một mức giá được so với Mua ở mức giá cao hơn 1 hàng.", "Nếu bên này lớn hơn bên kia từ ngưỡng này trở lên (ví dụ 3 lần), ô đó sáng lên và chữ đậm.", "Ví dụ ngưỡng 3: Mua 90 tại 2000.5 và Bán 20 tại 2000.0 → 90 ≥ 3 × 20, nên ô Mua 90 là imbalance mua.", "Ngưỡng càng cao thì càng ít ô sáng nhưng tín hiệu càng mạnh. Hay dùng 3."]}],
+     ["imv","Volume tối thiểu của ô imbalance",0,"i",{min:0,tt:"Ô chỉ được tính là imbalance khi volume của nó từ mức này trở lên. Dùng để loại các imbalance giả do volume quá nhỏ (vd 3 so với 1). 0 = không lọc."}],
+     ["stk","Stacked imbalance (số hàng liên tiếp, 0 = tắt)",3,"i",{min:0,max:20,tt:"Từ chừng này hàng liên tiếp cùng một phía imbalance trở lên thì đánh dấu thanh màu ở mép ô. Thường là vùng giá có phe mua/bán áp đảo mạnh."}],
      ["cm","Chế độ","fade","s",{g:"Màu nền",o:[["none","Không"],["fix","Cố định"],["fade","Mờ dần"]]}],
      ["cc","Tính theo","imb","s",{o:[["imb","Imbalance"],["vol","Volume"],["dl","Delta"],["dom","Volume áp đảo"]],on:p=>p.cm!=="none"}],
      ["op","Độ mờ",0.6,"n",{min:0.1,max:1,step:0.05,on:p=>p.cm!=="none"}],
@@ -82,10 +84,12 @@ const IND={
      ["vaout","Làm mờ ngoài vùng",true,"b",{on:p=>p.va}],
      ["valn","Đường VAH/VAL",true,"b",{on:p=>p.va}]],
   c:["#26c882","#ba32c4","#ffd700"],L:["Ask (mua)","Bid (bán)","Màu viền POC"],lab:p=>(p.ty==="ab"?"Ask/Bid":p.ty==="vol"?"Volume":p.ty==="dl"?"Delta":"Delta+Vol")+" "+p.step,f:()=>[]},
- bt:{n:"Big Trade",t:"of",d:"Bong bóng đánh dấu các mức giá có khối lượng mua hoặc bán lớn bất thường, kèm vùng ngang tùy chọn. Với CFD là số ước lượng.",
+ bt:{n:"Big Trade",t:"of",d:"Bong bóng đánh dấu các lệnh mua hoặc bán lớn bất thường (chuỗi tick cùng chiều), kèm vùng ngang tùy chọn. Với CFD là số ước lượng từ chuỗi báo giá bid/ask.",
   p:[["step","Bước giá",0.5,"n",{g:"Dữ liệu",mn:1,min:0.01,step:0.01}],
      ["days","Dữ liệu tải (ngày)",2,"i",{min:1,max:14}],
-     ["fm","Chế độ lọc","auto","s",{g:"Lọc",mn:1,hp:["Big Trade là gì?", "Big Trade là lệnh lớn bất thường: khối lượng Mua (Ask) hoặc Bán (Bid) tại một mức giá trong một phút vượt ngưỡng lọc. Mỗi bong bóng là một lệnh như vậy; bóng càng to và đậm thì volume càng lớn.", "Tự động: ngưỡng tính theo phân vị của các mức giá đã đóng (Thấp ≈ top 3%, Vừa ≈ top 1%, Mạnh ≈ top 0.3%), tự thích nghi với từng mã. Thủ công: bạn tự đặt volume Min và Max.", "Vùng (Zones) là đường ngang kéo dài từ lệnh lớn sang các nến sau, thường là vùng giá có phản ứng."],o:[["auto","Tự động"],["man","Thủ công"]]}],
+     ["bm","Cách xác định lệnh lớn","run","s",{mn:1,o:[["run","Chuỗi tick cùng chiều"],["lvl","Volume tại mức giá trong 1 phút"]],hp:["Hai cách xác định lệnh lớn","Chuỗi tick cùng chiều (khuyên dùng): một lệnh là chuỗi tick liên tiếp cùng chiều mua hoặc cùng chiều bán, không bị ngắt quá lâu. Gần với một lệnh thị trường quét sổ lệnh nhất, không bị cắt đôi ở ranh giới phút.","Volume tại mức giá trong 1 phút: tổng volume mua hoặc bán tại một mức giá trong một phút M1 (cách cũ). Nhiều lệnh nhỏ rải rác trong phút vẫn có thể bị gộp thành một lệnh lớn.","CFD không có dữ liệu khớp lệnh thật nên cả hai đều là số ước lượng."]}],
+     ["gap","Ngắt chuỗi khi nghỉ quá (ms)",300,"i",{min:50,max:5000,tt:"Hai tick liên tiếp cùng chiều cách nhau quá thời gian này thì tính là hai lệnh khác nhau. Nhỏ hơn: lệnh ngắn hơn, nhiều hơn. Đổi giá trị sẽ tải lại dữ liệu tick.",on:p=>p.bm!=="lvl"}],
+     ["fm","Chế độ lọc","auto","s",{g:"Lọc",mn:1,hp:["Big Trade là gì?", "Big Trade là lệnh lớn bất thường: khối lượng của một lệnh Mua (Ask) hoặc Bán (Bid) vượt ngưỡng lọc (số tick của chuỗi, hoặc volume tại một mức giá trong một phút, tùy cách xác định). Mỗi bong bóng là một lệnh như vậy; bóng càng to và đậm thì volume càng lớn.", "Tự động: ngưỡng tính theo phân vị của các lệnh đã đóng (Thấp ≈ top 3%, Vừa ≈ top 1%, Mạnh ≈ top 0.3%), tự thích nghi với từng mã. Thủ công: bạn tự đặt volume Min và Max.", "Vùng (Zones) là đường ngang kéo dài từ lệnh lớn sang các nến sau, thường là vùng giá có phản ứng."],o:[["auto","Tự động"],["man","Thủ công"]]}],
      ["lv","Cường độ","med","s",{mn:1,o:[["low","Thấp"],["med","Vừa"],["str","Mạnh"]],on:p=>p.fm==="auto"}],
      ["mn","Min",15,"i",{min:1,on:p=>p.fm==="man"}],
      ["mx","Max (0 = không giới hạn)",0,"i",{min:0,on:p=>p.fm==="man"}],

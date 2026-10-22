@@ -139,45 +139,105 @@ async function ctBars(lo,hi){
 }
 
 /* ---------- footprint từ tick ----------
-   cTrader (forex/CFD) không có giao dịch thật nên dùng tick-rule như EA cũ: ask hoặc bid tăng => MUA, giảm => BÁN, không đổi => giữ hướng cũ.
-   Mỗi lần giá đổi = 1 đơn vị khối lượng, đặt tại mức BID. Kết quả mỗi phút: [[giá,mua,bán],...] vào FPM (key = giờ server). */
-const FPL={ready:false,q:[],st:{bid:0,ask:0,side:0},min:0,map:null,last:0,dirty:false};
-function ctFpReset(){FPL.ready=false;FPL.q=[];FPL.st={bid:0,ask:0,side:0};FPL.min=0;FPL.map=null;FPL.last=0;FPL.dirty=false}
+   cTrader (forex/CFD) KHÔNG có tape giao dịch thật, chỉ có báo giá bid/ask. Footprint ở đây là ƯỚC LƯỢNG từ chuỗi báo giá, theo các quy tắc sau
+   (dùng CHUNG cho dữ liệu lịch sử và live nên hai phần khớp nhau):
+   1) Mỗi sự kiện báo giá làm bid hoặc ask đổi = 1 đơn vị khối lượng (tick volume). Sự kiện không đổi giá thì bỏ. Báo giá lỗi (ask < bid) bị bỏ, không làm hỏng trạng thái.
+   2) Hướng: ask/bid cùng tăng (hoặc một bên tăng, bên kia đứng yên) => MUA; cùng giảm => BÁN.
+      Spread nở/co (ask và bid đi ngược chiều) => xét hướng dịch của giá giữa (mid); mid không đổi => giữ hướng cũ.
+   3) Giá đặt: MUA đặt ở mức ASK (người mua khớp ở ask), BÁN đặt ở mức BID (người bán khớp ở bid).
+   4) Các sự kiện cùng mili-giây gộp thành 1 (lấy bid/ask cuối cùng), giống nhau ở lịch sử và live.
+   5) Lịch sử nạp theo cửa sổ kèm 5 phút "khởi động" phía trước để có sẵn bid/ask/hướng ở đầu cửa sổ (không mất tick đầu cửa sổ); phần khởi động không được cộng vào số liệu.
+   Kết quả mỗi phút: [[giá,mua,bán],...] vào FPM (key = giờ server). Giá là số thực của giá nguyên 1/100000, nên làm tròn lại bằng Math.round(p*1e5) là chính xác. */
+const FPL={ready:false,q:[],st:{bid:0,ask:0,side:0,run:null},min:0,map:null,last:0,dirty:false,pend:null,pendAt:0};
+/* Big Trade: 1 "lệnh lớn" = chuỗi tick LIÊN TIẾP cùng chiều (mua hoặc bán) mà 2 tick kề nhau cách nhau không quá BTG.gap ms (đổi chiều hoặc nghỉ quá gap thì chuỗi kết thúc).
+   Khối lượng = số tick của chuỗi, giá = bình quân giá khớp ước lượng (mua: ask, bán: bid). BTE: key giờ server của PHÚT bắt đầu chuỗi -> [[ts,giá,chiều,volume],...]. */
+const BTG={gap:300};const BTE=new Map();
+const FPD={trunc:0,bad:0};                      // chẩn đoán chất lượng dữ liệu: số lần tải tick bị cắt dở, số báo giá lỗi bị bỏ
+const FP_WARM=300000;                           // ms khởi động trước mỗi cửa sổ lịch sử
+function ctFpReset(){FPL.ready=false;FPL.q=[];FPL.st={bid:0,ask:0,side:0,run:null};FPL.min=0;FPL.map=null;FPL.last=0;FPL.dirty=false;FPL.pend=null;FPD.trunc=0;FPD.bad=0}
+// Phân loại 1 sự kiện báo giá. Trả +1 (mua), -1 (bán) hoặc 0 (không đổi / chưa đủ thông tin). Luôn cập nhật trạng thái st.
 function fpStep(st,bid,ask){
   let side=0;
-  if(st.bid>0){const db=bid-st.bid,da=ask-st.ask;
-    if((da>0&&db>=0)||(db>0&&da>=0))side=1;else if((da<0&&db<=0)||(db<0&&da<=0))side=-1;else side=st.side}
+  if(st.bid>0){
+    const db=bid-st.bid,da=ask-st.ask;
+    if(da||db){
+      if((da>0&&db>=0)||(da>=0&&db>0))side=1;
+      else if((da<0&&db<=0)||(da<=0&&db<0))side=-1;
+      else{const m=da+db;side=m>0?1:m<0?-1:st.side}      // spread nở/co: xét mid
+    }
+  }
   st.bid=bid;st.ask=ask;if(side)st.side=side;return side;
 }
 const fpAdd=(map,p,side)=>{let e=map.get(p);if(!e){e=[0,0];map.set(p,e)}side>0?e[0]++:e[1]++};
 const fpRows=map=>[...map].sort((a,b)=>a[0]-b[0]).map(([p,e])=>[px5(p),e[0],e[1]]);
+const fpOk=(b,a)=>b>0&&a>0&&a>=b;
+// chuỗi tick cùng chiều (Big Trade). emit(run) được gọi khi chuỗi kết thúc.
+function btFeed(st,ts,side,pr,emit){
+  const r=st.run;
+  if(r&&r.side===side&&ts-r.tl<=BTG.gap){r.tl=ts;r.v++;r.ps+=pr;r.at=performance.now();return}
+  if(r)emit(r);
+  st.run={side,t0:ts,tl:ts,v:1,ps:pr,at:performance.now()};
+}
+function btEmit(r,store){
+  const m=u2s(Math.floor(r.t0/60000)*60);let L=store.get(m);if(!L){L=[];store.set(m,L)}
+  L.push([r.t0,px5(Math.round(r.ps/r.v)),r.side,r.v]);
+}
+const btEmitLive=r=>{btEmit(r,BTE);FPL.dirty=true};
+// ghi 1 sự kiện (đã hợp lệ) vào phút tương ứng. Trả true nếu có cộng khối lượng
+function fpCount(st,ts,b,a,mapOf,emit){
+  const side=fpStep(st,b,a);if(!side)return false;
+  const pr=side>0?a:b;fpAdd(mapOf(Math.floor(ts/60000)*60),pr,side);btFeed(st,ts,side,pr,emit);return true;
+}
 function ctFpFlush(){if(FPL.map&&FPL.min)FPM.set(u2s(FPL.min),fpRows(FPL.map))}
-function ctFpTick(ts,b,a){
-  if(!FPL.ready){if(FPL.q.length<20000)FPL.q.push([ts,b,a]);return}
+// --- live: gộp các sự kiện cùng mili-giây rồi mới tính ---
+function ctFpCommit(p){
+  FPL.pend=null;const ts=p[0],b=p[1],a=p[2];
   if(ts<=FPL.last)return;
   FPL.last=ts;
-  if(b===FPL.st.bid&&a===FPL.st.ask)return;      // sự kiện không đổi giá (vd chỉ cập nhật nến) thì không tính là tick
-  const side=fpStep(FPL.st,b,a),m=Math.floor(ts/60000)*60;
+  if(!fpOk(b,a)){FPD.bad++;return}
+  const m=Math.floor(ts/60000)*60;
   if(m!==FPL.min){ctFpFlush();FPL.min=m;FPL.map=new Map()}
-  if(side)fpAdd(FPL.map,b,side);
-  FPL.dirty=true;
+  if(!FPL.map)FPL.map=new Map();
+  if(fpCount(FPL.st,ts,b,a,()=>FPL.map,btEmitLive))FPL.dirty=true;
 }
-// tick lịch sử của 1 loại (1=bid, 2=ask) trong [lo, hi] (ms), trả [[ts,giá],...] tăng dần. Dữ liệu là delta (phần tử đầu tuyệt đối), mới -> cũ.
+function ctFpTick(ts,b,a){
+  if(!FPL.ready){if(FPL.q.length<200000)FPL.q.push([ts,b,a]);return}
+  const p=FPL.pend;
+  if(p){
+    if(ts===p[0]){p[1]=b;p[2]=a;FPL.pendAt=performance.now();return}     // cùng mili-giây: lấy giá cuối
+    if(ts<p[0])return;                                                    // sự kiện cũ hơn (lệch thứ tự): bỏ
+    ctFpCommit(p);
+  }
+  if(ts<=FPL.last)return;                                                 // đã có trong dữ liệu lịch sử
+  FPL.pend=[ts,b,a];FPL.pendAt=performance.now();
+}
+function ctFpIdle(){
+  const p=FPL.pend;if(p&&performance.now()-FPL.pendAt>40)ctFpCommit(p);
+  const r=FPL.ready&&FPL.st.run;if(r&&performance.now()-r.at>BTG.gap+60){FPL.st.run=null;btEmitLive(r)}   // chuỗi đã nghỉ quá gap: chốt
+}   // poll() gọi: chốt sự kiện đang chờ khi không còn sự kiện cùng ms
+// tick lịch sử của 1 loại (1=bid, 2=ask) trong [lo, hi] (ms), trả [[ts,giá],...] tăng dần. Dữ liệu là delta cộng dồn (phần tử đầu tuyệt đối).
+// Server có thể trả mới->cũ hoặc cũ->mới: tự nhận biết hướng, mỗi trang được đưa về thứ tự thời gian tăng dần (kể cả các tick cùng ms).
 async function ctTicks(type,lo,hi){
-  const out=[];let from=lo,to=hi;
-  for(let k=0;k<60;k++){
+  const pages=[];let from=lo,to=hi,desc=true,k=0;
+  for(;k<600;k++){
     const r=await ctHist(2145,{ctidTraderAccountId:CT.acc,symbolId:CT.sym.id,type,fromTimestamp:from,toTimestamp:to}),d=r.tickData||[];
     if(!d.length)break;
     let t=0,p=0;const arr=new Array(d.length);
     for(let i=0;i<d.length;i++){t+=+d[i].timestamp;p+=+d[i].tick;arr[i]=[t,p]}
-    for(const x of arr)if(x[0]>=lo&&x[0]<=hi)out.push(x);
+    const a0=arr[0][0],a1=arr[arr.length-1][0];desc=a0>a1||(a0===a1&&desc);
+    if(desc)arr.reverse();                                   // về thứ tự tăng dần
+    pages.push(arr.filter(x=>x[0]>=lo&&x[0]<=hi));
     if(!r.hasMore)break;
-    const a0=arr[0][0],a1=arr[arr.length-1][0];
-    if(a0>=a1)to=a1-1;else from=a0+1;          // trang kế: lùi về phía cũ hơn (hoặc tiến tới nếu server trả cũ -> mới)
+    const mn=arr[0][0],mx=arr[arr.length-1][0];
+    if(desc){if(mn<=from)break;to=mn-1}else{if(mx>=to)break;from=mx+1}   // trang kế: lùi về phía cũ hơn (hoặc tiến tới nếu server trả cũ -> mới)
   }
-  return out.sort((x,y)=>x[0]-y[0]);
+  if(k>=600){FPD.trunc++;console.warn("cTrader: tải tick bị cắt ở 600 trang, dữ liệu footprint của cửa sổ này có thể thiếu phần đầu")}
+  if(desc)pages.reverse();                                   // các trang tới theo thứ tự mới -> cũ
+  const out=[].concat(...pages);
+  for(let i=1;i<out.length;i++)if(out[i][0]<out[i-1][0]){out.sort((x,y)=>x[0]-y[0]);break}   // an toàn: sort ổn định, giữ thứ tự các tick cùng ms
+  return out;
 }
-// ghép tick bid + ask thành các sự kiện [ts,bid,ask] (cùng mili-giây thì gộp làm 1)
+// ghép tick bid + ask thành các sự kiện [ts,bid,ask] (cùng mili-giây thì gộp làm 1, lấy giá cuối)
 function ctMergeTicks(B,A){
   const out=[];let i=0,j=0,b=0,a=0;
   while(i<B.length||j<A.length){
@@ -189,20 +249,25 @@ function ctMergeTicks(B,A){
   return out;
 }
 /* Tải footprint cho cửa sổ [lo, hi) (ms, lo căn theo phút). newest=true: cửa sổ mới nhất (tới "bây giờ"), sau khi xong thì bật chế độ live,
-   nối tiếp từ tick cuối cùng nên không trùng và không hở. Ghi thẳng vào FPM. */
+   nối tiếp từ tick cuối cùng nên không trùng và không hở. Ghi thẳng vào FPM.
+   Tick trong 5 phút trước lo chỉ dùng để dựng trạng thái bid/ask/hướng ban đầu, KHÔNG được cộng vào số liệu. */
 async function ctFpWindow(lo,hi,newest){
-  const [B,A]=await Promise.all([ctTicks(1,lo,hi),ctTicks(2,lo,hi)]);
-  const ev=ctMergeTicks(B,A),st={bid:0,ask:0,side:0},M=new Map();let last=0;
+  const [B,A]=await Promise.all([ctTicks(1,lo-FP_WARM,hi),ctTicks(2,lo-FP_WARM,hi)]);
+  const ev=ctMergeTicks(B,A),st={bid:0,ask:0,side:0,run:null},M=new Map(),RB=new Map();let last=0;
+  const mapOf=m=>{let mp=M.get(m);if(!mp){mp=new Map();M.set(m,mp)}return mp};
   for(const [t,b,a] of ev){
-    last=t;if(b<=0||a<=0)continue;
-    const side=fpStep(st,b,a);if(!side)continue;
-    const m=Math.floor(t/60000)*60;let mp=M.get(m);if(!mp){mp=new Map();M.set(m,mp)}fpAdd(mp,b,side);
+    if(t>=lo)last=t;
+    if(!fpOk(b,a)){if(t>=lo)FPD.bad++;continue}
+    if(t<lo){fpStep(st,b,a);continue}                         // khởi động: chỉ cập nhật trạng thái
+    fpCount(st,t,b,a,mapOf,r=>btEmit(r,RB));
   }
-  if(newest){                                       // phút đang chạy dở giữ lại để live cộng tiếp
+  if(!newest&&st.run){btEmit(st.run,RB);st.run=null}   // cửa sổ cũ: chốt chuỗi đang dở ở cuối cửa sổ
+  for(const [m,mp] of M)FPM.set(u2s(m),fpRows(mp));
+  for(const [m,L] of RB)BTE.set(m,L);                // ghi dữ liệu lịch sử TRƯỚC khi phát lại tick live (nếu không sẽ bị ghi đè)
+  if(newest){                                       // phút đang chạy dở giữ lại để live cộng tiếp; chuỗi đang dở của st tiếp tục chạy ở chế độ live
     FPL.st=st;FPL.last=last;FPL.min=last?Math.floor(last/60000)*60:0;FPL.map=FPL.min?(M.get(FPL.min)||new Map()):null;
     FPL.ready=true;
     const q=FPL.q;FPL.q=[];for(const [t,b,a] of q)ctFpTick(t,b,a);
   }
-  for(const [m,mp] of M)FPM.set(u2s(m),fpRows(mp));
   return ev.length;
 }
