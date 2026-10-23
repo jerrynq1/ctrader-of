@@ -72,14 +72,15 @@ function add(){
   requestAnimationFrame(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}));
 }
 function remove(id){
+  if(fsId===id)setFs(id);                          // thoát toàn màn hình trước khi xoá
+  const el=grid.querySelector(`[data-id="${id}"]`);
+  if(el){const f=el.querySelector("iframe");if(f){try{f.src="about:blank"}catch(e){}}el.remove()}   // gỡ iframe -> dừng kết nối + timer của chart đó ngay
   S.l=S.l.filter(x=>x.id!==id);save();
-  const el=grid.querySelector(`[data-id="${id}"]`);if(el){const f=el.querySelector("iframe");if(f)f.src="about:blank";el.remove()}
   delete info[id];
-  try{                                            // dọn dữ liệu riêng của chart đã xoá
+  try{                                            // dọn dữ liệu riêng của chart đã xoá (tp_sym_<id>, tp_tf_<id>, tp_ind_<id>, tp_dw_<mã>_<id>...)
     const dead=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.endsWith("_"+id))dead.push(k)}
     dead.forEach(k=>localStorage.removeItem(k));
   }catch(e){}
-  if(fsId===id)fsId=null,document.body.classList.remove("mcfs");
   layout();
 }
 function move(id,d){
