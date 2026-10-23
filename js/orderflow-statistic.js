@@ -11,28 +11,41 @@ const STR=[                                   // khóa, nhãn ngắn [vi,en,zh],
  ["te",["Effort","Effort","努力"],"d",0],["de",["Δ Effort","Δ Effort","Δ努力"],"d",1]];
 const stEl=document.createElement("div");stEl.id="stp";stEl.className="stp";stEl.style.display="none";stEl.innerHTML="<canvas></canvas>";$("panes").after(stEl);
 let STC=null;
+/* Statistic: số liệu của MỖI nến được cache riêng trên chính nến đó (c._st), chỉ tính lại khi dữ liệu của nến đó đổi:
+   nến cũ chỉ tính lại khi nạp thêm lịch sử (FPH) hoặc đổi cài đặt; nến cuối mới tính lại theo từng tick live (FPLV).
+   Trước đây MỖI tick live (4 lần/giây) đều tính lại TOÀN BỘ lịch sử (14 ngày ≈ 1.5 giây/lần) làm đơ cả chart.
+   Giờ mỗi tick chỉ tốn: tính nến cuối + 1 vòng cộng dồn CVD / chuẩn hoá màu (rẻ). */
+function stCandle(c,i,step,cot,fl,Q,M,ck){
+  const last=i===agg.length-1,lb=last&&m1.length?m1[m1.length-1]:null;
+  const key=ck+(last?"|L"+FPLV+","+m1.length+(cot&&lb?","+lb[2]+","+lb[3]:""):"");
+  if(c._st&&c._st.k===key)return c._st;
+  const lv=new Map(),mins=[];let buy=0,sell=0,run=0,mx=0,mn=0;
+  for(let t=c.st;t<c.st+C.tf;t+=60){const r=FPM.get(t);if(!r)continue;let d=0;
+    for(let [p,b,s] of r){if(fl){if(b<Q.fmn||(Q.fmx>0&&b>Q.fmx))b=0;if(s<Q.fmn||(Q.fmx>0&&s>Q.fmx))s=0;if(!b&&!s)continue}const q=fpQ(p,step);let e=lv.get(q);if(!e){e=[0,0];lv.set(q,e)}e[0]+=s;e[1]+=b;buy+=b;sell+=s;d+=b-s}
+    run+=d;if(run>mx)mx=run;if(run<mn)mn=run;mins.push([t,d])}
+  if(!mins.length)return c._st={k:key,none:true};
+  const hl=Math.max(1,fpQ(c.high,step)-fpQ(c.low,step)+1);
+  let lo=1e12,hi=-1e12;for(const q of lv.keys()){if(q<lo)lo=q;if(q>hi)hi=q}
+  const g=(q,k)=>{const e=lv.get(q);return e?e[k]:0},a1=g(hi,1),b1=g(lo,0);
+  let cth=0,ctl=0;
+  if(cot){let tl=-1,th=-1;for(const [t] of mins){const b=M.get(t);if(!b)continue;if(b[3]<=c.low)tl=t;if(b[2]>=c.high)th=t}
+    for(const [t,d] of mins){if(t>tl)cth+=d;if(t>th)ctl+=d}}
+  return c._st={k:key,buy,sell,mx,mn,hl,nm:mins.length,cth,ctl,hrv:a1>0?g(hi-1,1)/a1:null,lrv:b1>0?g(lo+1,0)/b1:null};
+}
 function stPrep(a){
   const Q=Object.assign(pdef(IND.dst),a.p),step=Math.max(.0001,+Q.step||.5),cot=!!(Q.cth||Q.ctl||Q.ctb),fl=Q.fmn>0||Q.fmx>0;
   const key=[C.sym,C.tf,step,agg.length,m1.length,FPV,cot,Q.sdk,Q.fmn,Q.fmx].join("|");
   if(STC&&STC.key===key)return STC;
   const M=new Map();if(cot)for(const x of m1)M.set(x[0],x);
-  const out=new Array(agg.length).fill(null);let cum=0,day=null;
+  const ck=[C.sym,step,FPH,cot,Q.fmn,Q.fmx,C.tf].join("|");
+  const out=new Array(agg.length).fill(null),lastM=m1.length?m1[m1.length-1][0]+60:0;let cum=0,day=null;
   for(let i=0;i<agg.length;i++){
-    const c=agg[i],lv=new Map(),mins=[];let buy=0,sell=0,run=0,mx=0,mn=0;
-    for(let t=c.st;t<c.st+C.tf;t+=60){const r=FPM.get(t);if(!r)continue;let d=0;
-      for(let [p,b,s] of r){if(fl){if(b<Q.fmn||(Q.fmx>0&&b>Q.fmx))b=0;if(s<Q.fmn||(Q.fmx>0&&s>Q.fmx))s=0;if(!b&&!s)continue}const q=fpQ(p,step);let e=lv.get(q);if(!e){e=[0,0];lv.set(q,e)}e[0]+=s;e[1]+=b;buy+=b;sell+=s;d+=b-s}
-      run+=d;if(run>mx)mx=run;if(run<mn)mn=run;mins.push([t,d])}
-    if(!mins.length)continue;
+    const c=agg[i],x=stCandle(c,i,step,cot,fl,Q,M,ck);
+    if(x.none)continue;
     const dk=Math.floor(c.st/86400);if(dk!==day){day=dk;cum=0}
-    const tot=buy+sell,dl=buy-sell,hl=Math.max(1,fpQ(c.high,step)-fpQ(c.low,step)+1);cum+=dl;
-    let lo=1e12,hi=-1e12;for(const q of lv.keys()){if(q<lo)lo=q;if(q>hi)hi=q}
-    const g=(q,k)=>{const e=lv.get(q);return e?e[k]:0},a1=g(hi,1),b1=g(lo,0);
-    let cth=0,ctl=0;
-    if(cot){let tl=-1,th=-1;for(const [t] of mins){const b=M.get(t);if(!b)continue;if(b[3]<=c.low)tl=t;if(b[2]>=c.high)th=t}
-      for(const [t,d] of mins){if(t>tl)cth+=d;if(t>th)ctl+=d}}
-    const hrv=a1>0?g(hi-1,1)/a1:null,lrv=b1>0?g(lo+1,0)/b1:null,lastM=m1.length?m1[m1.length-1][0]+60:0;
-    out[i]={tot,ask:buy,bid:sell,dl,dp:tot?dl/tot*100:0,cvd:cum,mxd:mx,mnd:mn,hl,vps:tot/(mins.length*60),cth,ctl,ctb:c.close>=c.open?cth:ctl,
-      hr:hrv,lr:lrv,br:c.close>=c.open?lrv:hrv,nt:c.v||0,tm:Math.max(60,Math.min(C.tf,lastM-c.st)),te:tot/hl,de:dl/hl};
+    const tot=x.buy+x.sell,dl=x.buy-x.sell;cum+=dl;
+    out[i]={tot,ask:x.buy,bid:x.sell,dl,dp:tot?dl/tot*100:0,cvd:cum,mxd:x.mx,mnd:x.mn,hl:x.hl,vps:tot/(x.nm*60),cth:x.cth,ctl:x.ctl,ctb:c.close>=c.open?x.cth:x.ctl,
+      hr:x.hrv,lr:x.lrv,br:c.close>=c.open?x.lrv:x.hrv,nt:c.v||0,tm:Math.max(60,Math.min(C.tf,lastM-c.st)),te:tot/x.hl,de:dl/x.hl};
   }
   const ref={};                                  // mức "đậm tối đa" của từng dòng = trung bình + k × độ lệch chuẩn của |giá trị|
   for(const [k] of STR){if(!Q[k])continue;let n=0,m=0;for(const o of out)if(o&&o[k]!=null){n++;m+=Math.abs(o[k])}

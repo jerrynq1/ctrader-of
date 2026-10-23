@@ -26,13 +26,13 @@ async function fpSync(){
       if(lo0>=hi)return;
       status("Đang tải thêm tick footprint…","");
     }
-    let span=first?2*3600e3:4*3600e3,isFirst=first;
+    let span=first?2*3600e3:3*3600e3,isFirst=first;
     for(;;){
       const lo=Math.max(lo0,Math.floor((hi-span)/6e4)*6e4);
       await ctFpWindow(lo,isFirst?hi:hi-1,isFirst);
       if(!ok())return;                                      // đổi mã / nối lại giữa chừng: bỏ, lần sau tải lại từ đầu
       fpStart=Math.floor(lo/1000);FPV++;FPH++;fpCov=null;dirty=true;isFirst=false;
-      hi=lo;span=Math.min(span*2,6*3600e3);
+      hi=lo;span=Math.min(span*2,3*3600e3);
       if(lo<=lo0)break;
     }
     if(first)fpLast=Math.floor(now/1000);
@@ -41,7 +41,7 @@ async function fpSync(){
   finally{fpBusy=false}
 }
 /* Tick nặng hơn nến nhiều, nên có trần an toàn: không tải quá FP_MAXD ngày gần nhất dù kéo chart xa tới đâu. */
-const FP_MAXD=14;
+const FP_MAXD=3;      // trước là 14: tick 14 ngày làm tải rất lâu + tính toán nặng. Cần xem xa hơn thì tăng số này (đổi ?v= trong index.html)
 const fpCap=()=>Math.floor((Date.now()-FP_MAXD*86400e3)/6e4)*6e4;
 // mốc (ms UTC) cũ nhất cần có tick = nến trái nhất đang nhìn thấy (m1/agg là giờ server nên đổi lại UTC bằng s2u)
 function fpNeed(){
