@@ -55,7 +55,7 @@ js/
 
 ## Khi sửa file về sau
 
-- Sau mỗi lần sửa, đổi `?v=15` thành `?v=16` trong `index.html` để trình duyệt tải lại file mới.
+- Sau mỗi lần sửa, đổi `?v=19` thành `?v=20` trong `index.html` để trình duyệt tải lại file mới.
 - **Không đổi thứ tự** các dòng `<script>` (các file dùng chung biến toàn cục).
 - Tránh đặt tên biến trùng với tên đã có ở file khác (hai file khai báo cùng một `const` sẽ làm file sau không chạy).
 
@@ -73,3 +73,23 @@ Bấm **F12 > Console**. Thanh trạng thái trên chart hiện lý do (sai Clie
 - Nến M1 và tick footprint đi hai làn riêng (chung giới hạn 5 req/s), tick tải nặng không còn chặn việc đổi mã / khung / tải nến.
 - Watchdog (`ctWatch` trong `ctrader.js`): im > 20s thì thăm dò, không trả lời thì tự nối lại; có kết nối mà > 60s không có giá thì đăng ký lại spot. Tab hiện lại / có mạng lại cũng kiểm tra ngay.
 - Chạy kiểm tra: `node tests/footprint.test.js && node tests/connection.test.js`
+- Nến live (v16): mỗi tick bid kéo high/low/close của nến phút hiện tại, không phụ thuộc server có gửi trendbar hay không. Chỉ báo cập nhật tối đa ~3 lần/giây.
+- Chart đứng thì mở Console (F12) gõ `ctDiag()` để xem đang kẹt ở đâu.
+- v17: tự bù nến M1 bị thiếu khi tab ẩn / máy ngủ / mạng chập (`catchUp` trong `chart.js`); cache số liệu của nến đã đóng kiểm tra thêm chữ ký dữ liệu (`fpSigOk`) nên không giữ số liệu cũ khi phút cuối được chốt muộn.
+
+## Thêm nhiều chart (v18)
+
+- Nút **Thêm chart** nằm ngay dưới chart chính. Mỗi lần bấm thêm 1 chart phụ (mặc định cùng mã, khung giờ lớn hơn 1 bậc để xem đa khung). Tối đa 4 chart phụ trên máy tính, 3 trên điện thoại (mỗi chart mở thêm 1 kết nối + luồng dữ liệu riêng).
+- Mỗi chart phụ là **bản đầy đủ của app** (footprint, big trade, statistic, volume profile, indicator, công cụ vẽ) chạy trong iframe cùng origin: `index.html?cid=<id>&sym=..&tf=..` (xem `js/multichart.js`, `js/embed.js`).
+- Mã, khung giờ, indicator, hình vẽ của từng chart lưu riêng (hậu tố `_<cid>` trong localStorage, xem `PERCH` trong `core.js`). Theme, múi giờ, màu nến, ngôn ngữ, thông tin kết nối dùng chung và đồng bộ ngay giữa các chart qua sự kiện `storage`.
+- Thẻ chart phụ có: đổi thứ tự (↑ ↓), toàn màn hình (Esc để thoát), xoá (bấm 2 lần), kéo thanh dưới thẻ để đổi chiều cao. Nút 1 cột / 2 cột chỉ hiện trên màn hình rộng.
+- Trên điện thoại: chạm vào vùng chart là thao tác chart (không cuộn trang), muốn cuộn trang thì vuốt ở thanh tiêu đề thẻ hoặc khoảng trống giữa các thẻ.
+
+## Chống đứng chart (v19)
+
+Lỗi cũ: Bid/Ask vẫn nhảy nhưng nến + footprint đứng im. Nguyên nhân: `poll()` ghi Bid/Ask ra màn hình rồi mới cập nhật nến, nên chỉ cần 1 bước phía sau ném lỗi (vẽ đường Bid/Ask, `cs.update` lệch thời gian, tính chỉ báo...) hoặc cờ `loading` bị kẹt thì phần còn lại dừng hẳn.
+
+- `poll()` tách từng bước có `try/catch` riêng; lỗi chỉ ghi log (`CHW.err`), không chặn bước sau. `applyLive` tự dựng lại chart khi `cs.update` lỗi, `render()` lớp phủ lỗi sẽ tự thử lại.
+- `chartWatch()` phát hiện "có giá bid mới nhưng nến > 6s không được cập nhật" và khôi phục theo cấp: dựng lại (6s) -> bù nến M1 (15s) -> tải lại (30s). Cờ `loading` kẹt quá 90s cũng tự tải lại. Thanh trạng thái báo "Chart chậm cập nhật…" khi đang khôi phục.
+- Nến live của phút đang chạy kế thừa open/high/low/volume thật từ lịch sử (trước đó có thể bị thay bằng nến chỉ có 1 giá sau khi tải lại).
+- Gõ `ctDiag()` trong Console khi chart đứng: có thêm `chartChoApDung_s`, `loiGanNhat`, `capHoiPhuc`.
