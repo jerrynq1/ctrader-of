@@ -27,7 +27,7 @@ js/
   core.js                        Tiện ích dùng chung ($, ld, sv, khung giờ) + dịch thông báo lỗi cTrader (why)
   timezone.js                    Múi giờ. cTrader trả UTC, app quy ra "giờ server New York close" (UTC+2/+3) để D1/W1 cắt đúng 17:00 NY
   ctrader.js                     TOÀN BỘ phần kết nối cTrader: WebSocket JSON, đăng nhập, nến M1, giá live, tick -> footprint
-  chart.js                       Chart nến, tải M1, gộp khung giờ, cập nhật live (poll() 250ms)
+  chart.js                       Chart nến, tải M1, gộp khung giờ (kể cả khung tuỳ chọn + khung giây dựng từ tick), cập nhật live (poll() 250ms)
   candle-style.js                Màu nến, đường Bid/Ask
   indicators-defs.js             Kho indicator
   indicators-engine.js           Dựng pane, hộp cài đặt
@@ -84,6 +84,23 @@ Bấm **F12 > Console**. Thanh trạng thái trên chart hiện lý do (sai Clie
 - Mã, khung giờ, indicator, hình vẽ của từng chart lưu riêng (hậu tố `_<cid>` trong localStorage, xem `PERCH` trong `core.js`). Theme, múi giờ, màu nến, ngôn ngữ, thông tin kết nối dùng chung và đồng bộ ngay giữa các chart qua sự kiện `storage`.
 - Thẻ chart phụ có: đổi thứ tự (↑ ↓), toàn màn hình (Esc để thoát), xoá (bấm 2 lần), kéo thanh dưới thẻ để đổi chiều cao. Nút 1 cột / 2 cột chỉ hiện trên màn hình rộng.
 - Trên điện thoại: chạm vào vùng chart là thao tác chart (không cuộn trang), muốn cuộn trang thì vuốt ở thanh tiêu đề thẻ hoặc khoảng trống giữa các thẻ.
+
+## Khung giờ tuỳ chọn (v25)
+
+- Cạnh các nút M1…W1 có nút **+**: nhập số + đơn vị (**Giây / Phút / Giờ / Ngày / Tuần**) rồi bấm *Dùng khung này*. Ví dụ 7 phút, 90 phút, 2 giờ, 3 ngày, 15 giây. Khung mới được lưu thành nút riêng (có dấu **×** để xoá), tối đa 8 khung tuỳ chọn, tối đa 4 tuần.
+- Danh sách khung tuỳ chọn lưu ở `localStorage` key `tp_ctf` và **dùng chung cho mọi chart** (chart chính + chart phụ, đồng bộ ngay qua sự kiện `storage`); khung đang chọn của từng chart vẫn lưu riêng (`tp_tf` / `tp_tf_<id>`). Chart phụ cũng có nút **+** riêng trên thanh khung giờ của nó.
+- **Từ 60 giây trở lên (bội số của 60s):** dựng từ nến M1 như các khung thường. Nến gom theo mốc epoch (giờ server): 7 phút, 90 phút, 3 ngày... Tuần và bội số của tuần neo vào thứ Hai như W1.
+- **Dưới 60 giây (1–59 giây):** cTrader không có nến nhỏ hơn M1 nên app dựng từ **tick bid** (`ctTicks` + báo giá live trong `ctSpot` -> `sbLive`, xem cuối `js/chart.js`). Volume = số lần bid đổi giá. Tick tải theo nhu cầu: lần đầu 30 phút gần nhất, kéo chart sang trái thì tải thêm, tối đa 24 giờ lịch sử.
+- Giới hạn khung giây: Footprint / Big Trade / Statistic cần dữ liệu theo phút nên **không chạy** trên khung < M1 (app báo ở thanh trạng thái). Indicator thường, công cụ vẽ, Bid/Ask line vẫn dùng bình thường. Đổi từ khung giây về khung phút thì app tự tải lại nến M1.
+- Test: `node tests/customtf.test.js`.
+
+## Chọn / dời hình vẽ trên cảm ứng (v26)
+
+- Trên điện thoại, **chạm xuống không còn chọn hay kéo hình**: kéo / zoom chart mà lỡ chạm vào hình (nhất là Volume Profile) thì hình đứng yên.
+- **Chọn hình:** chạm nhẹ (nhấc tay nhanh, không di chuyển, không có ngón thứ 2) lên hình. Volume Profile chỉ chọn khi chạm đúng phần hiển thị, không chọn cả khung.
+- **Dời cả hình:** chọn hình trước, rồi giữ yên ngón tay trên hình ~0,3 giây (máy rung nhẹ) rồi kéo. Nút tròn (điểm neo) của hình đang chọn vẫn kéo được ngay.
+- **Bỏ chọn:** chạm nhẹ vào chỗ trống. Kéo / zoom chart không làm mất chọn.
+- Chuột trên máy tính giữ nguyên như cũ. Code: `tpStart` / `cancelTp` trong `js/drawings-interact.js`.
 
 ## Chống đứng chart (v19)
 
