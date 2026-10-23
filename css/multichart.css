@@ -52,7 +52,8 @@ html.emb #mcl [data-m=fs]{display:none}
 html.emb .px{font-size:15px;gap:12px}
 /* thanh công cụ gọn của chart phụ: luôn dạng hàng ngang, kể cả khi iframe hẹp (ghi đè luật mobile của mobile.js) */
 html.emb #v-chart>.card.bar{flex-wrap:wrap;align-items:center;gap:4px 8px;padding:5px 8px}
-html.emb #v-chart #sym{order:0;flex:0 0 100px;width:100px;min-width:0;padding:6px 8px}
+html.emb #v-chart .symw{order:0;flex:0 0 112px;width:112px;min-width:0}
+html.emb #v-chart #sym{padding:6px 26px 6px 8px}
 html.emb #v-chart>.card.bar .tfs{order:1;flex:1 1 230px;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;touch-action:pan-x}
 html.emb #v-chart>.card.bar .tfs::-webkit-scrollbar{display:none}
 html.emb #v-chart .tf{flex:none;padding:6px 10px}

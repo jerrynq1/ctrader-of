@@ -47,7 +47,7 @@ input[type=checkbox]{width:20px;height:20px;padding:0;accent-color:#d9a334}
 .btn:hover{background-position:100% 50%;box-shadow:0 0 28px rgba(var(--glow),.6),inset 0 1px 0 rgba(255,255,255,.6),inset 0 -2px 4px rgba(120,70,0,.3)}
 .btn.ghost{background:var(--inp);color:var(--ink);border:1px solid var(--line);box-shadow:none}
 .btn.ghost:hover{border-color:var(--acc);box-shadow:0 0 16px rgba(var(--glow),.3)}
-#sym{width:110px;font-weight:700}
+#sym{width:100%;font-weight:700}
 .px{margin-left:auto;display:flex;gap:18px;font:700 17px Sora,"Space Grotesk",sans-serif;font-variant-numeric:tabular-nums}
 .px small{display:block;font:500 11px "Space Grotesk",sans-serif;color:var(--mut)}
 .pill{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--inp);color:var(--mut)}
