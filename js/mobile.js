@@ -72,6 +72,17 @@ body.cfs #dwp{top:calc(58px + env(safe-area-inset-top,0px));left:calc(56px + env
 body.cfs #clk{right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(5px + env(safe-area-inset-bottom,0px))}
 body.cfs #tzp{bottom:calc(38px + env(safe-area-inset-bottom,0px))}
 body.cfs #mcl{left:calc(58px + env(safe-area-inset-left,0px));bottom:calc(72px + env(safe-area-inset-bottom,0px))}
+/* Toàn màn hình: trước đây style.css (:root[data-theme] #chartCard) có độ ưu tiên cao hơn nên nền thẻ chart vẫn trong suốt, thanh công cụ / chart phụ phía sau lộ ra thành "hình mờ" và còn bấm được.
+   Giờ: nền đặc (!important) + ẩn hẳn mọi thứ nằm sau khi đang toàn màn hình. */
+body.cfs #chartCard{background:var(--hole)!important;border:0!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+body.cfs #mch{background:var(--hole)}
+body.cfs #v-chart>.card.bar,body.cfs #mc,body.cfs #embBack,body.cfs #side,body.cfs .scrim,body.cfs #sky{display:none!important}
+/* Nút toàn màn hình cho máy tính (chuột): góc trên bên phải chart, cạnh trục giá */
+#fsd{position:absolute;top:8px;right:78px;z-index:8;display:none;width:32px;height:32px;place-items:center;padding:0;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);cursor:pointer;opacity:.7;transition:opacity .15s}
+#fsd:hover{opacity:1;background:var(--inp)}
+#fsd svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+@media (hover:hover) and (pointer:fine) and (min-width:761px){#fsd{display:grid}}
+body.cfs #fsd,html.emb #fsd{display:none!important}
 `;
 document.head.appendChild(css);
 
@@ -137,6 +148,8 @@ const BT=[["zo","Thu nhỏ"],["zi","Phóng to"],["auto","Tự căn thang giá"],
 const cl=document.createElement("div");cl.id="mcl";cl.setAttribute("role","toolbar");cl.setAttribute("aria-label","Điều khiển chart");
 cl.innerHTML=BT.map(([k,t])=>`<button type="button" data-m="${k}" title="${t}" aria-label="${t}"><svg viewBox="0 0 20 20">${IC[k]}</svg></button>`).join("");
 card.appendChild(cl);
+const fd=document.createElement("button");fd.id="fsd";fd.type="button";fd.dataset.m="fs";fd.title="Toàn màn hình";fd.setAttribute("aria-label","Toàn màn hình");
+fd.innerHTML=`<svg viewBox="0 0 20 20">${IC.fs}</svg>`;card.appendChild(fd);
 const hd=document.createElement("div");hd.id="mch";
 hd.innerHTML=`<div class="mcs" data-no-i18n><span id="mcsy"></span><small id="mcpx"></small></div><button type="button" class="mcb" data-m="exit" title="Thoát toàn màn hình" aria-label="Thoát toàn màn hình"><svg viewBox="0 0 20 20">${IC.x}</svg></button>`;
 card.appendChild(hd);
@@ -146,7 +159,8 @@ function zoom(f){const ts=chart.timeScale(),r=ts.getVisibleLogicalRange();if(!r)
   ts.setVisibleLogicalRange(atEnd?{from:r.to-ns,to:r.to}:{from:(r.from+r.to)/2-ns/2,to:(r.from+r.to)/2+ns/2})}
 function autoPrice(){allCh().forEach(c=>{try{c.priceScale("right").applyOptions({autoScale:true})}catch(e){}})}
 const tfs=$("tfs"),tfsHome=tfs?tfs.parentNode:null,ph=document.createComment("tfs");
-let fsTimer=0,fsPushed=false;
+let fsTimer=0,fsPushed=false,fsReal=false;
+const desk=()=>matchMedia("(hover:hover) and (pointer:fine)").matches;
 const fsOn=()=>document.body.classList.contains("cfs");
 function lab(){$("mcsy").textContent=C.sym||"";$("mcpx").textContent=($("bid").textContent||"").trim()}
 function setFs(on){
@@ -155,19 +169,24 @@ function setFs(on){
     if(tfs){tfsHome.insertBefore(ph,tfs);hd.insertBefore(tfs,hd.querySelector(".mcb"))}
     document.body.classList.add("cfs");lab();fsTimer=setInterval(lab,1000);
     try{history.pushState({mcfs:1},"");fsPushed=true}catch(e){}
+    if(desk()&&document.documentElement.requestFullscreen&&!document.fullscreenElement){   // máy tính: vào toàn màn hình thật của trình duyệt (ẩn cả thanh địa chỉ)
+      fsReal=true;try{const r=document.documentElement.requestFullscreen({navigationUI:"hide"});if(r&&r.catch)r.catch(()=>{fsReal=false})}catch(e){fsReal=false}
+    }
   }else{
     document.body.classList.remove("cfs");clearInterval(fsTimer);
     if(tfs&&ph.parentNode)ph.parentNode.insertBefore(tfs,ph),ph.remove();
     if(fsPushed){fsPushed=false;try{if(history.state&&history.state.mcfs)history.back()}catch(e){}}
+    if(fsReal){fsReal=false;if(document.fullscreenElement){try{const r=document.exitFullscreen();if(r&&r.catch)r.catch(()=>{})}catch(e){}}}
   }
-  const b=cl.querySelector('[data-m="fs"]');b.innerHTML=`<svg viewBox="0 0 20 20">${on?IC.fx:IC.fs}</svg>`;
-  {const t=on?"Thoát toàn màn hình":"Toàn màn hình";b.setAttribute("title",t);b.setAttribute("aria-label",t)}
+  card.querySelectorAll('[data-m="fs"]').forEach(b=>{b.innerHTML=`<svg viewBox="0 0 20 20">${on?IC.fx:IC.fs}</svg>`;
+    const t=on?"Thoát toàn màn hình":"Toàn màn hình";b.setAttribute("title",t);b.setAttribute("aria-label",t)});
   requestAnimationFrame(()=>window.dispatchEvent(new Event("resize")));
 }
 card.addEventListener("click",e=>{const b=e.target.closest("[data-m]");if(!b||!card.contains(b))return;const m=b.dataset.m;
   if(m==="zi")zoom(1.35);else if(m==="zo")zoom(1/1.35);else if(m==="auto")autoPrice();
   else if(m==="last"){try{chart.timeScale().scrollToRealTime()}catch(x){}}
   else if(m==="fs")setFs(!fsOn());else if(m==="exit")setFs(false)});
+document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&fsReal){fsReal=false;if(fsOn())setFs(false)}});   // bấm Esc: trình duyệt tự thoát toàn màn hình, app thoát theo
 window.addEventListener("popstate",()=>{if(fsOn()){fsPushed=false;setFs(false)}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&fsOn()&&!document.querySelector(".mdl,#dwk"))setFs(false)});
 matchMedia(MQ).addEventListener("change",e=>{if(!e.matches)setFs(false)});
