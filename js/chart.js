@@ -14,6 +14,17 @@ function PDIG(){
   if(Number.isInteger(d)&&d>=0&&d<=10)return d;
   let m=0;for(let i=agg.length-1,k=0;i>=0&&k<60;i--,k++){const x=agg[i];for(const v of[x.open,x.high,x.low,x.close]){const s=String(+(+v).toFixed(8)),p=s.indexOf(".");if(p>=0&&s.length-p-1>m)m=s.length-p-1}}
   return Math.max(2,Math.min(8,m))}
+/* Đổi mã (vd XAUUSD -> EURUSD): trục giá có thể đang ở chế độ thủ công (người dùng đã kéo/zoom trục giá) nên vẫn giữ khoảng giá của mã cũ,
+   chart trống rỗng cho tới khi zoom ra xa rồi vào lại. Khi dữ liệu mã mới về: bật lại tự căn thang giá cho mọi chart (chính + các pane chỉ báo),
+   về nến mới nhất, và đưa TPO về chế độ Live. Chạy 1 lần cho mỗi lần đổi mã. */
+let viewSym=C.sym;
+function symReset(){
+  if(viewSym===C.sym)return;viewSym=C.sym;
+  try{allCh().forEach(c=>{try{c.priceScale("right").applyOptions({autoScale:true})}catch(e){}})}catch(e){}
+  try{chart.priceScale("vol").applyOptions({autoScale:true})}catch(e){}
+  try{chart.timeScale().scrollToRealTime()}catch(e){}
+  try{if(typeof TV!=="undefined"){TV.follow=true;TV.cp=null;TV.an=null;const b=$("tpoLive");if(b)b.classList.add("on")}}catch(e){}
+}
 const priceFmt=()=>{const d=PDIG();return{type:"price",precision:d,minMove:+Math.pow(10,-d).toFixed(d)}};
 let pfDig=-1;
 function applyPrec(){                              // đặt lại định dạng giá của trục + nhãn khi số lẻ đổi (đổi mã)
@@ -61,9 +72,9 @@ async function loadM1(){
       empty+=top-lo;top=lo;m1Span=Math.min(m1Span*2,4*86400);
       if(empty>=M1_GIVEUP){m1NoMore=true;break}
     }
-    if(!acc.length){m1=[];rebuild(true);status("Chưa có nến cho "+C.sym+" (kiểm tra tên mã đúng với broker, hoặc thị trường chưa có dữ liệu)","bad");return}
+    if(!acc.length){m1=[];rebuild(true);symReset();status("Chưa có nến cho "+C.sym+" (kiểm tra tên mã đúng với broker, hoặc thị trường chưa có dữ liệu)","bad");return}
     m1Span=Math.min(m1Span*2,M1_MAXSPAN);
-    m1=acc;rebuild(false);
+    m1=acc;rebuild(false);symReset();
     // bù các nến mới đóng trong lúc đang tải (poll() bị tạm dừng nối nến live khi loading) để không bị hở
     try{
       const bars=await ctBars(s2u(m1[m1.length-1][0]),Math.floor(Date.now()/1000)+120);
@@ -299,7 +310,7 @@ async function loadSub(){
     }
     sb=sbBuild(T);SB.ready=true;
     const q=SB.q;SB.q=[];for(const [t,b] of q)if(t>hi)sbPush(t,b/1e5);   // tick live tới trong lúc tải
-    rebuild(true);
+    rebuild(true);symReset();
     if(sb.length)sbStatus();else status("Chưa có tick cho "+C.sym+" (thị trường đóng cửa hoặc broker không lưu tick)","bad");
     tfNote();
   }catch(e){status("Lỗi tải tick: "+why(e),"bad");SB.ready=true;SB.q=[]}
