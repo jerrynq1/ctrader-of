@@ -147,3 +147,11 @@ input[type=color]:disabled{opacity:.35;cursor:not-allowed}
 .tfp .tfpr input{flex:1 1 50%;min-width:0}.tfp .tfpr select{flex:1 1 50%;min-width:0}
 .tfp .tfpm{min-height:18px;margin-bottom:6px;font-size:12px;color:var(--loss)}
 .tfp .btn{width:100%}
+
+/* ===== TPO Chart ===== */
+#tpoCard{margin-top:14px;padding:6px;position:relative;height:calc(100vh - 190px);min-height:380px;background:var(--card);border:1px solid var(--line);box-shadow:0 12px 40px rgba(0,0,10,.3),0 0 30px rgba(var(--glow),.08)}
+#tpoCard canvas{position:absolute;left:6px;top:6px;touch-action:none;cursor:crosshair}
+#tpoInfo{position:absolute;left:14px;top:10px;z-index:2;max-width:calc(100% - 100px);font-size:12px;color:var(--mut);pointer-events:none;text-shadow:0 0 6px var(--hole)}
+#tpoLive.on{background:var(--grad);color:var(--onacc);border-color:transparent}
+#tpoSym{color:var(--acc)}
+@media(max-width:520px){#tpoCard{height:calc(100vh - 260px)}}
