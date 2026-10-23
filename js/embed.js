@@ -16,6 +16,11 @@ addEventListener("storage",e=>{
 if(!EMB)return;
 
 /* ---------- Chỉ chart phụ ---------- */
+/* tab Indicator của trang chính ghi vào tp_ind_<cid>: nạp lại danh sách indicator của chart này */
+addEventListener("storage",ev=>{
+  if(ev.key!=="tp_ind_"+CID)return;
+  try{ACT=(JSON.parse(ev.newValue||"[]")||[]).filter(a=>a&&IND[a.key]).map(normA);renderInd();if(typeof cur!=="undefined"&&cur==="ind")buildInd()}catch(x){}
+});
 $("embBack").onclick=()=>show("chart");
 /* báo cho trang cha: mã, khung giờ, giá bid (để hiện trên tiêu đề thẻ) */
 let last="";

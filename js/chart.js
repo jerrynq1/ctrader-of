@@ -174,4 +174,4 @@ function chartWatch(){
 function buildTfs(){$("tfs").innerHTML=TFS.map(([n,s])=>`<button class="tf${s===C.tf?" on":""}" data-s="${s}">${n}</button>`).join("")}
 $("tfs").onclick=e=>{const b=e.target.closest("button");if(!b)return;C.tf=+b.dataset.s;sv("tp_tf",C.tf);buildTfs();rebuild(true)};
 $("sym").value=C.sym;
-$("sym").onchange=()=>{C.sym=$("sym").value.trim();sv("tp_sym",C.sym);$("bid").textContent=$("ask").textContent="–";loadM1()};
+/* đổi mã: xem symbols.js (ô chọn mã tuỳ biến) */

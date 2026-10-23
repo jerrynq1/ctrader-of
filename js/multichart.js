@@ -18,6 +18,7 @@ const I={
   fs:'<path d="M4 8V4h4M16 8V4h-4M4 12v4h4M16 12v4h-4"/>',fx:'<path d="M8 4v4H4M12 4v4h4M8 16v-4H4M12 16v-4h4"/>',
   x:'<path d="M5 5l10 10M15 5L5 15"/>',plus:'<path d="M10 4v12M4 10h12"/>'};
 const ic=k=>`<svg viewBox="0 0 20 20" aria-hidden="true">${I[k]}</svg>`;
+window.MC={list:()=>S.l.map(x=>{const i=info[x.id]||{};return{id:x.id,sym:i.sym||ld0("tp_sym_"+x.id,""),tf:i.tf?tfName(+i.tf):tfName(+ld0("tp_tf_"+x.id,0))}})};
 const tfName=s=>(TFS.find(t=>t[1]===s)||["?"])[0];
 const defH=()=>narrow()?Math.max(420,Math.min(680,Math.round(innerHeight*.8))):560;
 const uid=()=>"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
@@ -61,6 +62,7 @@ function layout(){
   b.disabled=full;b.title=full?"Đã đạt số chart phụ tối đa":"Thêm chart";
   $("mcN").textContent=n?n+"/"+maxN():"";
   root.classList.toggle("has",n>0);
+  if(document.body.dataset.v==="ind"&&typeof buildInd==="function")buildInd();   // danh sách "chart đích" ở tab Indicator
   document.querySelectorAll("#mcCols [data-c]").forEach(x=>x.classList.toggle("on",+x.dataset.c===(S.c===1?1:2)));
 }
 function add(){
@@ -139,7 +141,8 @@ grid.addEventListener("pointerup",rzEnd);grid.addEventListener("pointercancel",r
 addEventListener("message",e=>{
   const m=e.data;if(!m||m.gx!==1||e.origin!==location.origin&&location.origin!=="null")return;
   const el=grid.querySelector(`[data-id="${m.cid}"]`);if(!el)return;
-  info[m.cid]={sym:m.sym,tf:m.tf,bid:m.bid};head(el,m.sym,m.tf,m.bid);
+  const ch=!info[m.cid]||info[m.cid].sym!==m.sym||info[m.cid].tf!==m.tf;info[m.cid]={sym:m.sym,tf:m.tf,bid:m.bid};head(el,m.sym,m.tf,m.bid);
+  if(ch&&document.body.dataset.v==="ind"&&typeof buildInd==="function")buildInd();
 });
 
 $("mcAdd").onclick=add;

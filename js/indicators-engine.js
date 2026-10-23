@@ -305,26 +305,51 @@ function openSet(id){
 legend();
 let IF="all";
 const TL={ov:"Overlay",osc:"Oscillator",of:"Orderflow"};
+/* ----- Chọn chart đích: "main" = chart đang mở, hoặc id của một chart phụ (danh sách do multichart.js cấp qua window.MC) -----
+   Chart phụ chạy trong iframe riêng, có danh sách indicator riêng lưu ở localStorage "tp_ind_<id>"; ghi vào đó, iframe nhận qua sự kiện "storage" (embed.js). */
+let IT="main";
+const mcT=()=>(!EMB&&window.MC)?MC.list():[];
+const subOn=()=>IT!=="main"&&mcT().some(x=>x.id===IT);
+const subKey=()=>"tp_ind_"+IT;
+function subGet(){try{return(JSON.parse(localStorage.getItem(subKey())||"[]")||[]).filter(a=>a&&IND[a.key]).map(normA)}catch{return[]}}
+function subSet(l){try{localStorage.setItem(subKey(),JSON.stringify(l))}catch(e){}}
+function buildTgt(){
+  const L=mcT(),w=$("indTgtW");if(IT!=="main"&&!L.some(x=>x.id===IT))IT="main";
+  w.style.display=L.length?"":"none";if(!L.length)return;
+  $("indTgt").innerHTML=[["main","Chart chính"],...L.map((x,i)=>[x.id,"Chart "+(i+2)+(x.sym?" · "+x.sym+(x.tf?" "+x.tf:""):"")])].map(([k,n])=>`<button class="tf${k===IT?" on":""}" data-t="${k}">${n}</button>`).join("");
+}
 function buildInd(){
-  $("actList").innerHTML=ACT.length?ACT.map(a=>{const d=IND[a.key];
-    return `<div class="f" style="grid-template-columns:1fr auto;gap:8px 12px" data-id="${a.id}"><div><b>${d.n}</b> <span class="msg">${TL[d.t]}</span><div class="bar" style="margin-top:6px">${d.p.filter(sp=>pshow(sp,a.p)&&(d.t!=="of"||(sp[4]&&sp[4].mn))).map(sp=>`<label class="msg">${sp[1]} ${pin(sp,a.p[sp[0]],"ap_"+a.id+"_",sp[3]==="s"?"width:auto":sp[3]==="b"?"":"width:78px")}</label>`).join("")}${d.L.map((l,j)=>`<label class="msg">${l} <input type="color" data-c="${j}" value="${cres(a,j)}"></label>`).join("")}</div></div><div class="bar"><label class="msg">Hiện <input type="checkbox" data-on="1"${a.on?" checked":""}></label><button class="btn ghost sm" data-set="1">Cài đặt</button><button class="btn ghost sm" data-rm="1">Xóa</button></div></div>`}).join(""):`<div class="msg">Chưa có indicator nào. Chọn trong kho bên dưới.</div>`;
+  buildTgt();
+  const sb=subOn(),LS=sb?subGet():ACT;
+  $("actList").innerHTML=LS.length?LS.map(a=>{const d=IND[a.key];
+    if(sb)return `<div class="f" style="grid-template-columns:1fr auto;gap:8px 12px" data-id="${a.id}"><div><b>${d.n}</b> <span class="msg">${TL[d.t]}</span></div><div class="bar"><label class="msg">Hiện <input type="checkbox" data-on="1"${a.on?" checked":""}></label><button class="btn ghost sm" data-rm="1">Xóa</button></div></div>`;
+    return `<div class="f" style="grid-template-columns:1fr auto;gap:8px 12px" data-id="${a.id}"><div><b>${d.n}</b> <span class="msg">${TL[d.t]}</span><div class="bar" style="margin-top:6px">${d.p.filter(sp=>pshow(sp,a.p)&&(d.t!=="of"||(sp[4]&&sp[4].mn))).map(sp=>`<label class="msg">${sp[1]} ${pin(sp,a.p[sp[0]],"ap_"+a.id+"_",sp[3]==="s"?"width:auto":sp[3]==="b"?"":"width:78px")}</label>`).join("")}${d.L.map((l,j)=>`<label class="msg">${l} <input type="color" data-c="${j}" value="${cres(a,j)}"></label>`).join("")}</div></div><div class="bar"><label class="msg">Hiện <input type="checkbox" data-on="1"${a.on?" checked":""}></label><button class="btn ghost sm" data-set="1">Cài đặt</button><button class="btn ghost sm" data-rm="1">Xóa</button></div></div>`}).join("")+(sb?`<div class="msg" style="margin-top:10px">Muốn chỉnh thông số/màu của chart này: mở chart đó rồi bấm biểu tượng bánh răng ở chú thích indicator.</div>`:""):`<div class="msg">Chưa có indicator nào. Chọn trong kho bên dưới.</div>`;
   $("indGrid").innerHTML=Object.entries(IND).filter(([k,d])=>IF==="all"||d.t===IF).map(([k,d])=>`<div class="card"><h2>${d.n} <span class="pill">${TL[d.t]}</span></h2><p class="msg" style="margin:0 0 12px">${d.d}</p><button class="btn sm" data-add="${k}">+ Thêm vào chart</button></div>`).join("");
   $("indF").innerHTML=[["all","Tất cả"],["ov","Overlay"],["osc","Oscillator"],["of","Orderflow"]].map(([k,n])=>`<button class="tf${k===IF?" on":""}" data-f="${k}">${n}</button>`).join("");
 }
 $("v-ind").onclick=e=>{
-  const t=e.target.closest("[data-add],[data-rm],[data-f],[data-set]");if(!t)return;
+  const t=e.target.closest("[data-add],[data-rm],[data-f],[data-set],[data-t]");if(!t)return;
+  if(t.dataset.t){IT=t.dataset.t;buildInd();return}
   if(t.dataset.set){openSet(t.closest("[data-id]").dataset.id);return}
   if(t.dataset.f){IF=t.dataset.f;buildInd();return}
-  if(t.dataset.add){ACT.push(mkA(t.dataset.add));saveInd();renderInd();buildInd();return}
-  if(t.dataset.rm){const id=t.closest("[data-id]").dataset.id;ACT=ACT.filter(a=>a.id!==id);saveInd();renderInd();buildInd()}
+  if(t.dataset.add){
+    if(subOn()){subSet(subGet().concat(mkA(t.dataset.add)))}
+    else{ACT.push(mkA(t.dataset.add));saveInd();renderInd()}
+    buildInd();return}
+  if(t.dataset.rm){const id=t.closest("[data-id]").dataset.id;
+    if(subOn())subSet(subGet().filter(a=>a.id!==id));
+    else{ACT=ACT.filter(a=>a.id!==id);saveInd();renderInd()}
+    buildInd()}
 };
 $("v-ind").onchange=e=>{
-  const t=e.target,row=t.closest("[data-id]");if(!row)return;const a=ACT.find(x=>x.id===row.dataset.id);if(!a)return;
+  const t=e.target,row=t.closest("[data-id]");if(!row)return;
+  if(subOn()){if(t.dataset.on){const l=subGet(),a=l.find(x=>x.id===row.dataset.id);if(a){a.on=t.checked;subSet(l)}}return}
+  const a=ACT.find(x=>x.id===row.dataset.id);if(!a)return;
   if(t.dataset.p){setP(a,IND[a.key],t.dataset.p,t);saveInd();remTpl(a);renderInd();if(t.tagName==="SELECT"||t.type==="checkbox")buildInd()}
   else if(t.dataset.on){a.on=t.checked;saveInd();renderInd()}
 };
 $("v-ind").oninput=e=>{
-  const t=e.target,j=t.dataset.c;if(j===undefined)return;const a=ACT.find(x=>x.id===t.closest("[data-id]").dataset.id);if(!a)return;
+  const t=e.target,j=t.dataset.c;if(j===undefined||subOn())return;const a=ACT.find(x=>x.id===t.closest("[data-id]").dataset.id);if(!a)return;
   a.c[+j]=t.value;saveInd();remTpl(a);if(IND[a.key].rc)rIndSoon();else applyColor(a,+j);legend();
 };
 document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>show(b.dataset.go));

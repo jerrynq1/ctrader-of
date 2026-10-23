@@ -6,6 +6,8 @@ const LANGS=[["vi","Tiếng Việt"],["en","English"],["zh","中文"]];
 const T=[
 /* --- Nhiều chart --- */
 ["Thêm chart","Add chart","添加图表"],
+["Thêm indicator vào chart","Add indicator to chart","将指标添加到图表"],
+["Chart chính","Main chart","主图表"],
 ["Chart phụ","Extra chart","附加图表"],
 ["Chuyển lên","Move up","上移"],
 ["Chuyển xuống","Move down","下移"],

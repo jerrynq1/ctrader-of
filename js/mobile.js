@@ -45,7 +45,7 @@ html body #ohlc,html body #legend{left:60px!important}
 #v-chart>.card.bar{padding:8px 10px;gap:8px}
 #v-chart>.card.bar .tfs{flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch}
 #v-chart>.card.bar .tfs::-webkit-scrollbar{display:none}
-#v-chart #sym{order:-3;flex:1 1 0;min-width:0;width:auto}
+#v-chart .symw{order:-3;flex:1 1 0;min-width:0;width:auto}
 #v-chart #st{order:-2}
 #v-chart>.card.bar .tfs{order:-1}
 #v-chart .tf{flex:none;padding:8px 13px}

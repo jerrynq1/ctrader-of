@@ -86,13 +86,18 @@ async function ctConnect(){
   const r=await ctSend(2114,{ctidTraderAccountId:acc});
   CT.symbols=(r.symbol||[]).filter(s=>s.enabled!==false);
   CT.ready=true;CT.epoch++;
-  try{const sl=$("symList");if(sl)sl.innerHTML=CT.symbols.map(s=>`<option value="${String(s.symbolName).replace(/"/g,"")}">`).join("")}catch{}
 }
 const normSym=s=>String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+/* tìm mã trên broker: tên chính (k) rồi các tên gọi khác (symbols.js); khớp đúng trước, rồi khớp phần đầu */
+function ctFind(name){
+  const L=CT.symbols||[],c=typeof symCands==="function"?symCands(name):[normSym(name)];
+  for(const a of c){const s=L.find(x=>normSym(x.symbolName)===a);if(s)return s}
+  for(const a of c){if(a.length<3)continue;const s=L.find(x=>normSym(x.symbolName).startsWith(a));if(s)return s}
+  for(const a of c){if(!a)continue;const re=new RegExp("^"+a+"(?![A-Za-z])","i"),s=L.find(x=>re.test(String(x.symbolName)));if(s)return s}
+  return null}
 async function ctUseSymbol(name){
-  const n=normSym(name),L=CT.symbols||[];
-  let s=L.find(x=>normSym(x.symbolName)===n)||L.find(x=>normSym(x.symbolName).startsWith(n));
-  if(!s)throw new Error("SYMBOL: không thấy mã '"+name+"' trong tài khoản"+(n?" (gợi ý: "+L.filter(x=>normSym(x.symbolName).includes(n.slice(0,3))).slice(0,6).map(x=>x.symbolName).join(", ")+")":""));
+  const L=CT.symbols||[],s=ctFind(name);
+  if(!s)throw new Error("SYMBOL: broker không có mã '"+name+"' (đã thử: "+((typeof symCands==="function"?symCands(name):[normSym(name)]).join(", "))+")");
   const id=+s.symbolId;
   let digits=5;
   try{const r=await ctSend(2116,{ctidTraderAccountId:CT.acc,symbolId:[id]});digits=+((r.symbol||[])[0]||{}).digits||5}catch{}
