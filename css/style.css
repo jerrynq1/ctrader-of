@@ -135,3 +135,15 @@ input[type=color]:disabled{opacity:.35;cursor:not-allowed}
 :root[data-theme] .pill{border:1px solid var(--line)}
 .mdl h3{font-family:Sora,"Space Grotesk",sans-serif}
 @media(max-width:760px){:root[data-theme] #side{background:var(--hole)}}
+
+/* khung giờ tuỳ chọn: nút xoá (×) trên nút khung + ô nhập nổi */
+.tf .x{font-style:normal;margin-left:6px;opacity:.55;font-weight:700;cursor:pointer}
+.tf .x:hover{opacity:1;color:var(--loss)}
+.tf.on .x:hover{color:inherit}
+#tfAdd{font-weight:800;font-size:15px;line-height:1;padding:6px 12px}
+.tfp{position:fixed;z-index:60;width:min(250px,calc(100vw - 16px));padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--hole);color:var(--ink);box-shadow:0 14px 44px rgba(0,0,10,.45)}
+.tfp .tfpt{font:700 13px Sora,"Space Grotesk",sans-serif;margin-bottom:8px}
+.tfp .tfpr{display:flex;gap:6px;margin-bottom:8px}
+.tfp .tfpr input{flex:1 1 50%;min-width:0}.tfp .tfpr select{flex:1 1 50%;min-width:0}
+.tfp .tfpm{min-height:18px;margin-bottom:6px;font-size:12px;color:var(--loss)}
+.tfp .btn{width:100%}
