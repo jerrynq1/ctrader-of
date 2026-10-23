@@ -154,5 +154,5 @@ document.addEventListener("keydown",e=>{if(document.querySelector(".mdl")||/INPU
   if(m&&k==="z"){e.preventDefault();e.shiftKey?redo():undo()}else if(m&&k==="y"){e.preventDefault();redo()}else if(m&&k==="c"&&sel)clip=JSON.stringify(sel,rp);else if(m&&k==="v"&&clip){e.preventDefault();paste(clip)}else if(m&&k==="d"&&sel){e.preventDefault();dup()}});
 /* chart không có sự kiện đổi thang giá, nên kiểm tra mỗi khung hình và chỉ vẽ lại khi có thay đổi */
 (function tick(){requestAnimationFrame(tick);if(C.sym!==dsym)loadD();const r=$("chart").getBoundingClientRect(),a=ts.getVisibleLogicalRange();
-  const s=[r.width,r.height,a&&a.from,a&&a.to,cs.priceToCoordinate(0),cs.priceToCoordinate(1000),n(),P.theme,C.tf,m1.length,m1.length?m1[m1.length-1][5]:0,FPV,ACT.length,JSON.stringify([fpOn(),btOn(),stOn()].map(x=>x||0))].join();if(s!==sig||dirty){sig=s;dirty=false;render()}})();
+  const s=[r.width,r.height,a&&a.from,a&&a.to,cs.priceToCoordinate(0),cs.priceToCoordinate(1000),n(),P.theme,C.tf,m1.length,m1.length?m1[m1.length-1][5]:0,m1.length?m1[m1.length-1][4]:0,FPV,ACT.length,JSON.stringify([fpOn(),btOn(),stOn()].map(x=>x||0))].join();if(s!==sig||dirty){sig=s;dirty=false;try{render()}catch(e){chErr("render",e);setTimeout(()=>{dirty=true},500)}}})();
 ui();

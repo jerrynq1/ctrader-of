@@ -4,6 +4,20 @@ const LANGS=[["vi","Tiếng Việt"],["en","English"],["zh","中文"]];
 
 /* [vi, en, zh] */
 const T=[
+/* --- Nhiều chart --- */
+["Thêm chart","Add chart","添加图表"],
+["Chart phụ","Extra chart","附加图表"],
+["Chuyển lên","Move up","上移"],
+["Chuyển xuống","Move down","下移"],
+["Xoá chart này","Remove this chart","删除此图表"],
+["Bấm lần nữa để xoá","Tap again to remove","再点一次删除"],
+["Kéo để đổi chiều cao","Drag to resize height","拖动调整高度"],
+["Đã đạt số chart phụ tối đa","Maximum number of extra charts reached","已达附加图表上限"],
+["Số cột","Columns","列数"],
+["1 cột","1 column","1 列"],
+["2 cột","2 columns","2 列"],
+["Mỗi chart có mã, khung giờ và indicator riêng","Each chart has its own symbol, timeframe and indicators","每个图表有独立的品种、周期和指标"],
+["← Chart","← Chart","← 图表"],
 /* --- Thanh bên, chung --- */
 ["Thu gọn thanh bên","Collapse sidebar","收起侧边栏"],
 ["Menu","Menu","菜单"],

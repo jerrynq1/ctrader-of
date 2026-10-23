@@ -13,7 +13,7 @@ IC.cs='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="
 const V=[["chart","Chart"],["ind","Indicator"],["cs","Chart Setting"],["conn","Kết nối"]];
 let cur="chart";
 function show(v){
-  cur=v;V.forEach(([k])=>$("v-"+k).classList.toggle("on",k===v));
+  cur=v;document.body.dataset.v=v;V.forEach(([k])=>$("v-"+k).classList.toggle("on",k===v));
   $("nav").innerHTML=V.map(([k,n])=>`<button class="sb${k===v?" on":""}" data-v="${k}" title="${n}"><span class="ic">${IC[k]}</span><span class="lb">${n}</span></button>`).join("");
   if(v==="ind")buildInd();
   if(v==="cs")buildCS();

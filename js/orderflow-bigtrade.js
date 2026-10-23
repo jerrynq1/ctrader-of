@@ -41,8 +41,8 @@ function btPrep(a){
 }
 function btOf(c,S){
   const last=agg.length&&c===agg[agg.length-1],key=S.sig+"|"+S.thr.lo+"|"+S.thr.hi+"|"+(last?FPV:0);
-  if(c._bk===key)return c._bl;
-  const out=[],lo=S.thr.lo,hi=S.thr.hi;
+  const SM=S.mode==="run"?BTE:FPM;if(c._bk===key&&fpSigOk(c,"_bs",SM))return c._bl;
+  fpSigSet(c,"_bs",SM);const out=[],lo=S.thr.lo,hi=S.thr.hi;
   for(let t=c.st;t<c.st+C.tf;t+=60){const L=btMin(t,S);if(!L)continue;for(const it of L)if(it[2]>=lo&&it[2]<=hi)out.push({q:it[0],side:it[1],v:it[2]})}
   out.sort((x,y)=>y.v-x.v);if(S.cap>0&&out.length>S.cap)out.length=S.cap;c._bk=key;return c._bl=out;
 }

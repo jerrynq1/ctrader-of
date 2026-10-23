@@ -44,7 +44,7 @@ bar.innerHTML=TT.map(t=>t?`<button type="button" data-t="${t[0]}" title="${t[1]}
 card.appendChild(bar);
 const pp=document.createElement("div");pp.id="dwp";pp.innerHTML="";
 card.appendChild(pp);
-const key=()=>"tp_dw_"+C.sym;
+const key=()=>"tp_dw_"+C.sym+(EMB?"_"+CID:"");
 let H=[],hx=0,ht=0,clip=null,kc=false,ks=false,keep=false,tl=1,mpv=null,lx=null,ly=null,claim=false,tch=false,pendEdit=null;window.addEventListener("keydown",e=>{kc=e.ctrlKey||e.metaKey;ks=e.shiftKey;upd()});window.addEventListener("keyup",e=>{kc=e.ctrlKey||e.metaKey;ks=e.shiftKey;upd()});window.addEventListener("blur",()=>{kc=ks=false;upd()});window.addEventListener("mousemove",e=>{const[x,y]=rel(e);lx=x;ly=y;kc=e.ctrlKey||e.metaKey;ks=e.shiftKey;if(mpv||xs2||drag||tool!=="cur")upd()});const rp=(k,v)=>k[0]==="_"?undefined:v;
 const put=s=>{try{localStorage.setItem(key(),s)}catch(e){}};
 const save=()=>{const s=JSON.stringify(D,rp);put(s);if(s===H[hx])return;const t=Date.now();if(document.querySelector(".mdl")&&t-ht<800&&hx>0)H[hx]=s;else{H=H.slice(0,hx+1);H.push(s);hx++;if(H.length>100){H.shift();hx--}}ht=t};

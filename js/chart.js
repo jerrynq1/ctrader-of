@@ -18,10 +18,16 @@ const vcol=(o,c)=>(c>=o?eff().up:eff().dn)+"55";
 function status(t,c){const e=$("st");e.textContent=t;e.className="pill "+(c||"")}
 /* Tải M1 THEO NHU CẦU: mở chart chỉ tải ~1 ngày gần nhất, kéo chart sang trái tới đâu thì tải thêm nến cũ tới đó (fillLeft).
    Mốc thời gian ở đây là UTC (giây). m1Old = mốc cũ nhất đã hỏi server; m1Span = độ dài lần tải kế (1 -> 2 -> 4 -> 8 ngày). */
+/* ===== Chống đứng chart =====
+   Trước đây poll() chạy một mạch: ghi Bid/Ask ra màn hình RỒI mới cập nhật nến/footprint. Chỉ cần 1 bước ở giữa ném lỗi (vẽ đường Bid/Ask, cs.update lệch thời gian,
+   tính chỉ báo...) hoặc cờ loading bị kẹt thì nến + footprint dừng hẳn trong khi Bid/Ask vẫn nhảy. Giờ: mỗi bước có try/catch riêng (lỗi chỉ ghi log, không chặn bước sau),
+   và chartWatch() tự phát hiện "có giá mới mà nến không được cập nhật" để khôi phục theo cấp: áp lại -> dựng lại -> bù nến -> tải lại. Chẩn đoán: ctDiag() trong Console. */
+const CHW={applied:Date.now(),lvl:0,err:"",errAt:0,loadAt:0,stale:6000,mid:15000,reload:30000,loadMax:90000};
+function chErr(w,e){CHW.err=w+": "+String(e&&e.message||e);const n=Date.now();if(n-CHW.errAt>5000){CHW.errAt=n;console.warn("[chart] lỗi ở "+w,e)}}
 let fpKick=0,m1Old=0,m1Span=86400,m1Empty=0,m1NoMore=false,fillBusy=false,fillRetry=0;
 const M1_MAXSPAN=8*86400,M1_GIVEUP=30*86400;    // gặp liên tiếp 30 ngày không có nến thì coi như hết lịch sử
 async function loadM1(){
-  const g=++gen;loading=true;fillBusy=false;m1NoMore=false;m1Empty=0;m1Span=86400;fillRetry=0;
+  const g=++gen;loading=true;CHW.loadAt=Date.now();fillBusy=false;m1NoMore=false;m1Empty=0;m1Span=86400;fillRetry=0;
   const now=Math.floor(Date.now()/1000)+120;
   let acc=[];
   try{
@@ -51,7 +57,7 @@ async function loadM1(){
     }catch(e){}
     status(m1.length+" nến M1 · cTrader","ok");
   }catch(e){status((acc.length?"Tải dở dang ("+m1.length+" nến) · lỗi: ":"Lỗi tải: ")+why(e),"bad")}
-  finally{if(g===gen){loading=false;if(m1.length)fillLeft()}}
+  finally{if(g===gen){loading=false;CHW.loadAt=0;if(m1.length)fillLeft()}}
 }
 /* Nối thêm nến cũ vào bên trái khi người dùng kéo chart gần tới đầu dữ liệu (còn < 40 nến bên trái màn hình).
    Giữ nguyên vị trí đang xem (bù số nến vừa thêm), nên chart không bị giật. */
@@ -104,24 +110,66 @@ function rebuild(fit){
 }
 function applyLive(b){
   const last=m1[m1.length-1];
-  if(last&&last[0]===b[0])m1[m1.length-1]=b;else if(!last||b[0]>last[0])m1.push(b);else return;
+  if(last&&last[0]===b[0])m1[m1.length-1]=b;else if(!last||b[0]>last[0])m1.push(b);else{if(Date.now()-cuAt>15000)catchUp();return}   // nến live cũ hơn nến cuối: dữ liệu lệch, bù lại thay vì im lặng bỏ qua
   const k=bucket(b[0],C.tf);let o,h,l,c,v=0;
   for(let i=m1.length-1;i>=0&&m1[i][0]>=k;i--){const x=m1[i];o=x[1];c=c??x[4];h=Math.max(h??x[2],x[2]);l=Math.min(l??x[3],x[3]);v+=x[5]}
   if(o===undefined)return;
   const bar={st:k,time:disp(k),open:o,high:h,low:l,close:c,v},a=agg[agg.length-1];
-  if(a&&a.st===k)agg[agg.length-1]=bar;else if(!a||bar.time>a.time)agg.push(bar);else return;
-  cs.update(bar);vs.update({time:bar.time,value:v,color:vcol(o,c)});liveInd();
+  if(a&&a.st===k)agg[agg.length-1]=bar;else if(!a||bar.time>a.time)agg.push(bar);else{if(Date.now()-cuAt>15000)catchUp();return}
+  try{cs.update(bar);vs.update({time:bar.time,value:v,color:vcol(o,c)})}
+  catch(e){chErr("cs.update",e);try{rebuild(false)}catch(x){chErr("rebuild",x)}return}   // series lệch thứ tự thời gian...: dựng lại từ m1
+  CHW.applied=Date.now();
+  /* chỉ báo tính lại trên toàn bộ nến nên khá nặng: tối đa ~3 lần/giây (nến + giá vẫn cập nhật từng tick) */
+  const n=performance.now();if(n-liveIndAt>330){liveIndAt=n;clearTimeout(liveIndT);safeInd()}else{clearTimeout(liveIndT);liveIndT=setTimeout(()=>{liveIndAt=performance.now();safeInd()},330)}
 }
+let liveIndAt=0,liveIndT=0;
+const safeInd=()=>{try{liveInd()}catch(e){chErr("liveInd",e)}};
+/* Bù nến M1 bị thiếu. applyLive() chỉ nối đúng nến live hiện tại, nên khi tab bị ẩn (poll() dừng), máy ngủ hoặc mạng chập vài phút thì các nến ở giữa
+   KHÔNG BAO GIỜ được tải: chart bị hở, và với khung lớn thì high/low/open của nến hiện tại sai. Hàm này tải lại từ nến cuối tới giờ rồi ghép vào. */
+let cuBusy=false,cuAt=0;
+async function catchUp(){
+  if(cuBusy||loading||!ctReady()||!m1.length)return;
+  const g=gen;cuBusy=true;cuAt=Date.now();
+  try{
+    const bars=await ctBars(s2u(m1[m1.length-1][0])-120,Math.floor(Date.now()/1000)+120);
+    if(g!==gen||loading||!bars.length||!m1.length)return;
+    const t0=bars[0][0];let i=m1.length;while(i>0&&m1[i-1][0]>=t0)i--;     // bỏ đuôi cũ từ nến đầu của đợt tải, nối đợt mới vào
+    m1.length=i;for(const x of bars)m1.push(x);
+    if(CT.liveBar)CT.barDirty=true;                                          // nến live (mới hơn tới từng tick) được áp lại ngay sau đó
+    rebuild(false);
+  }catch(e){}
+  finally{cuBusy=false}
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(catchUp,300)});
 /* Mỗi 250ms: lấy giá + nến live + footprint live mà ctrader.js đã nhận qua WebSocket (cTrader tự đẩy, không cần hỏi server). */
 function poll(){
   if(document.hidden||!ctReady())return;
-  if(CT.quoteDirty&&CT.bid>0){
-    CT.quoteDirty=false;const d=CT.sym.digits,bid=(CT.bid/1e5).toFixed(d),ask=CT.ask>0?(CT.ask/1e5).toFixed(d):"–";
-    $("bid").textContent=bid;$("ask").textContent=ask;if(window.baUpdate)baUpdate(C.sym,CT.bid/1e5,CT.ask/1e5);   // đường Bid/Ask trên chart
-  }
-  if(CT.barDirty&&CT.liveBar&&m1.length&&!loading){CT.barDirty=false;applyLive(CT.liveBar)}
-  ctFpIdle();
-  if(FPL.dirty){FPL.dirty=false;ctFpFlush();FPV++;FPLV++;dirty=true}
+  try{
+    if(CT.quoteDirty&&CT.bid>0){
+      CT.quoteDirty=false;const d=CT.sym.digits,bid=(CT.bid/1e5).toFixed(d),ask=CT.ask>0?(CT.ask/1e5).toFixed(d):"–";
+      $("bid").textContent=bid;$("ask").textContent=ask;
+      try{if(window.baUpdate)baUpdate(C.sym,CT.bid/1e5,CT.ask/1e5)}catch(e){chErr("baUpdate",e)}   // đường Bid/Ask trên chart: lỗi ở đây không được chặn nến
+    }
+  }catch(e){chErr("quote",e)}
+  try{
+    if(CT.barDirty&&CT.liveBar&&m1.length&&!loading){
+      if(CT.liveBar[0]-m1[m1.length-1][0]>120&&Date.now()-cuAt>15000)catchUp();   // nến live nhảy xa hơn 2 phút so với nến cuối: thiếu nến ở giữa
+      CT.barDirty=false;applyLive(CT.liveBar)}
+  }catch(e){chErr("applyLive",e)}
+  try{ctFpIdle()}catch(e){chErr("ctFpIdle",e)}
+  try{if(FPL.dirty){FPL.dirty=false;ctFpFlush();FPV++;FPLV++;dirty=true}}catch(e){chErr("ctFpFlush",e)}
+  try{chartWatch()}catch(e){chErr("chartWatch",e)}
+}
+/* Có giá bid mới (CT.dirtyAt) mà nến không được áp trong > 6s => chart đang đứng. Khôi phục theo cấp, mỗi cấp chỉ chạy 1 lần cho tới khi chart chạy lại. */
+function chartWatch(){
+  const n=Date.now();
+  if(loading&&CHW.loadAt&&n-CHW.loadAt>CHW.loadMax){CHW.loadAt=0;loading=false;chErr("loading","kẹt quá "+Math.round(CHW.loadMax/1e3)+"s, tải lại");loadM1();return}
+  if(loading||!m1.length)return;
+  const lag=CT.dirtyAt>CHW.applied&&n-CT.dirtyAt<3000?n-CHW.applied:0;
+  if(lag<CHW.stale){if(CHW.lvl){CHW.lvl=0;status(m1.length+" nến M1 · cTrader","ok")}return}
+  if(lag>=CHW.reload&&CHW.lvl<3){CHW.lvl=3;CHW.applied=n;status("Chart đứng, đang tải lại…","bad");loadM1();return}
+  if(lag>=CHW.mid&&CHW.lvl<2){CHW.lvl=2;status("Chart chậm cập nhật, đang bù nến…","bad");catchUp();return}
+  if(CHW.lvl<1){CHW.lvl=1;status("Chart chậm cập nhật, đang khôi phục…","bad");rebuild(false);CT.barDirty=true}
 }
 function buildTfs(){$("tfs").innerHTML=TFS.map(([n,s])=>`<button class="tf${s===C.tf?" on":""}" data-s="${s}">${n}</button>`).join("")}
 $("tfs").onclick=e=>{const b=e.target.closest("button");if(!b)return;C.tf=+b.dataset.s;sv("tp_tf",C.tf);buildTfs();rebuild(true)};

@@ -1,8 +1,13 @@
 const $=id=>document.getElementById(id);
-const ld=(k,d)=>{try{return localStorage.getItem(k)??d}catch{return d}};
-const sv=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
+/* Chart phụ (nút "Thêm chart"): chạy chính app này trong iframe với ?cid=<id>&sym=..&tf=..
+   Mã, khung giờ, indicator của từng chart được lưu riêng (hậu tố _<cid>); theme, múi giờ, màu nến, kết nối cTrader dùng chung. */
+const QS=new URLSearchParams(location.search),CID=(QS.get("cid")||"").replace(/[^\w-]/g,""),EMB=!!CID;
+const PERCH=["tp_sym","tp_tf","tp_ind","tp_lgc"],kk=k=>EMB&&PERCH.includes(k)?k+"_"+CID:k;
+const ld=(k,d)=>{try{return localStorage.getItem(kk(k))??d}catch{return d}};
+const ld0=(k,d)=>{try{return localStorage.getItem(k)??d}catch{return d}};
+const sv=(k,v)=>{try{localStorage.setItem(kk(k),v)}catch{}};
 const TFS=[["M1",60],["M5",300],["M15",900],["M30",1800],["H1",3600],["H4",14400],["D1",86400],["W1",604800]];
-let C={sym:ld("tp_sym","XAUUSD"),tf:+ld("tp_tf",900)};
+let C={sym:ld("tp_sym",QS.get("sym")||ld0("tp_sym","XAUUSD")),tf:+ld("tp_tf",QS.get("tf")||ld0("tp_tf",900))};
 let P={theme:ld("gx-theme","")||ld("tp_theme","")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"),sc:ld("tp_sc","")==="1"};
 
 /* ================= LỖI cTrader -> tiếng Việt (kết nối + dữ liệu nằm ở ctrader.js) ================= */

@@ -1,6 +1,10 @@
 /* ===== Orderflow: Footprint (indicator "fpr") ===== */
 const FPM=new Map();let FPV=0,FPH=0,FPLV=0,fpSym="",fpLast=0,fpBusy=false,fpEpoch=0,fpRetry=0,fpStart=0,fpCov=null,fpGap=0;
 /* Gộp hàng giá bằng SỐ NGUYÊN (đơn vị 1/100000) để không bị sai số số thực ở biên hàng: hàng q phủ khoảng giá [q*step, (q+1)*step). Dùng chung cho Footprint / Big Trade / Statistic. */
+/* Chữ ký dữ liệu các phút của 1 nến = [mảng dữ liệu, độ dài, ...]. Cache của nến phải kiểm tra thêm chữ ký này: phút cuối của một nến có thể được chốt
+   SAU khi nến đã đóng (tick cuối chờ gộp cùng ms, chuỗi Big Trade chốt sau khi nghỉ quá gap), nếu chỉ dựa vào FPH thì nến vừa đóng giữ số liệu cũ mãi. */
+const fpSigOk=(c,p,M)=>{const R=c[p];if(!R)return false;for(let k=0,t=c.st;t<c.st+C.tf;t+=60,k+=2){const v=M.get(t);if(R[k]!==v||R[k+1]!==(v?v.length:0))return false}return true};
+const fpSigSet=(c,p,M)=>{const R=[];for(let t=c.st;t<c.st+C.tf;t+=60){const v=M.get(t);R.push(v,v?v.length:0)}c[p]=R};
 const FPU=1e5,fpSI=step=>Math.max(1,Math.round(step*FPU));
 const fpQ=(p,step)=>Math.floor(Math.round(p*FPU)/fpSI(step));      // chỉ số hàng chứa giá p
 const fpYp=(q,step)=>(q+.5)*fpSI(step)/FPU;                         // giá ở tâm hàng q (để vẽ)
@@ -53,8 +57,8 @@ setInterval(fpSync,2000);
    Cache theo phiên bản dữ liệu: nến cũ chỉ tính lại khi nạp thêm lịch sử (FPH) hoặc đổi cài đặt; chỉ nến cuối mới tính lại theo từng tick live (FPLV). */
 function fpCandle(c,step,Q){
   const vap=Q.vap,ratio=Q.ratio,imv=Math.max(0,+Q.imv||0),stk=Math.max(0,Math.round(+Q.stk||0));
-  const last=agg.length&&c===agg[agg.length-1],key=[step,FPH,vap,ratio,imv,stk,last?FPLV:0].join("|");if(c._fk===key)return c._fl;
-  const lv=new Map();let tot=0;
+  const last=agg.length&&c===agg[agg.length-1],key=[step,FPH,vap,ratio,imv,stk,last?FPLV:0].join("|");if(c._fk===key&&fpSigOk(c,"_fs",FPM))return c._fl;
+  fpSigSet(c,"_fs",FPM);const lv=new Map();let tot=0;
   for(let t=c.st;t<c.st+C.tf;t+=60){const r=FPM.get(t);if(!r)continue;for(const [p,b,s] of r){const q=fpQ(p,step);let e=lv.get(q);if(!e){e=[0,0];lv.set(q,e)}e[0]+=s;e[1]+=b}}
   let lo=1e12,hi=-1e12,mxs=1,mxt=1,mxd=1;
   for(const [q,e] of lv){if(q<lo)lo=q;if(q>hi)hi=q;const t=e[0]+e[1],d=Math.abs(e[1]-e[0]);tot+=t;mxs=Math.max(mxs,e[0],e[1]);mxt=Math.max(mxt,t);mxd=Math.max(mxd,d)}

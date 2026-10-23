@@ -96,7 +96,7 @@ async function ctUseSymbol(name){
   const id=+s.symbolId;
   let digits=5;
   try{const r=await ctSend(2116,{ctidTraderAccountId:CT.acc,symbolId:[id]});digits=+((r.symbol||[])[0]||{}).digits||5}catch{}
-  CT.sym={id,name:s.symbolName,digits,req:name};CT.bid=CT.ask=0;CT.liveBar=null;CT.tkBar=null;CT.tbAt=0;CT.barDirty=CT.quoteDirty=false;
+  CT.sym={id,name:s.symbolName,digits,req:name};CT.bid=CT.ask=0;CT.liveBar=null;CT.liveU=0;CT.tkBar=null;CT.tbAt=0;CT.barDirty=CT.quoteDirty=false;
   ctFpReset();
   if(!CT.subs.has(id)){
     await ctSend(2127,{ctidTraderAccountId:CT.acc,symbolId:[id],subscribeToSpotTimestamp:true}).catch(e=>{if(!/ALREADY/i.test(e.message))throw e});
@@ -162,14 +162,25 @@ function ctSpot(p){
   CT.lastSpot=Date.now();
   if(p.bid!=null)CT.bid=+p.bid;if(p.ask!=null)CT.ask=+p.ask;     // 1 sự kiện có thể chỉ chứa bid hoặc ask
   const ts=+p.timestamp||Date.now();CT.quoteDirty=true;
+  /* Nến M1 live. Trước đây nến chỉ cập nhật khi server gửi kèm trendbar (hoặc sau 4s im lặng mới tự dựng từ bid), nên Bid/Ask nhảy liên tục
+     mà nến đứng im / giật cục. Giờ: trendbar của server (nếu có) là số liệu gốc cho phút đó, và MỌI báo giá bid đều kéo high/low/close của nến
+     phút hiện tại theo, nên nến chạy theo giá ở từng tick dù server có gửi trendbar hay không. */
+  const u=Math.floor(ts/60000)*60,now=Date.now();
   if(p.trendbar&&p.trendbar.length){
-    const tb=p.trendbar.find(x=>x.period==null||x.period===1||x.period==="M1");
-    if(tb){CT.liveBar=tbToBar(tb).b;CT.barDirty=true;CT.tbAt=Date.now()}
-  }else if(CT.bid>0&&Date.now()-CT.tbAt>4000){    // không nhận được nến live từ server: tự dựng nến M1 từ bid
-    const u=Math.floor(ts/60000)*60,v=px5(CT.bid),k=CT.tkBar;
-    if(k&&k.u===u){k.b[2]=Math.max(k.b[2],v);k.b[3]=Math.min(k.b[3],v);k.b[4]=v;k.b[5]++}
-    else CT.tkBar={u,b:[u2s(u),v,v,v,v,1]};
-    CT.liveBar=CT.tkBar.b;CT.barDirty=true;
+    const x=p.trendbar.find(x=>x.period==null||x.period===1||x.period==="M1");
+    if(x){const t=tbToBar(x);if(t.u>=(CT.liveU||0)){CT.liveBar=t.b;CT.liveU=t.u;CT.barDirty=true;CT.dirtyAt=now;CT.tbAt=now}}
+  }
+  if(p.bid!=null&&CT.bid>0){
+    const v=px5(CT.bid),L=CT.liveBar;
+    if(L&&CT.liveU===u){                                  // phút hiện tại đã có nến: kéo theo giá bid mới
+      if(v>L[2])L[2]=v;if(v<L[3])L[3]=v;L[4]=v;
+      if(now-CT.tbAt>4000)L[5]++;                         // server không gửi trendbar: tự đếm tick volume
+      CT.barDirty=true;CT.dirtyAt=now;
+    }else if(!L||u>(CT.liveU||0)){                        // sang phút mới mà chưa có trendbar: mở nến mới từ bid
+      /* nếu phút này đã có trong lịch sử (vừa tải xong) thì kế thừa open/high/low/volume thật, không để nến live chỉ có 1 giá che mất chúng */
+      const h=typeof m1!=="undefined"&&m1.length?m1[m1.length-1]:null;
+      CT.liveBar=h&&h[0]===u2s(u)?[h[0],h[1],Math.max(h[2],v),Math.min(h[3],v),v,h[5]]:[u2s(u),v,v,v,v,1];CT.liveU=u;CT.barDirty=true;CT.dirtyAt=now;
+    }
   }
   if(CT.bid>0&&CT.ask>0)ctFpTick(ts,CT.bid,CT.ask);
 }
@@ -320,4 +331,17 @@ async function ctFpWindow(lo,hi,newest){
     const q=FPL.q;FPL.q=[];for(const [t,b,a] of q)ctFpTick(t,b,a);
   }
   return ev.length;
+}
+
+/* Chẩn đoán: gõ ctDiag() trong Console (F12) khi chart đứng để biết đang kẹt ở đâu. */
+function ctDiag(){
+  const L=CT.liveBar,l=m1.length?m1[m1.length-1]:null,n=Date.now();
+  const d={ketNoi:CT.ready,maDangXem:C.sym,maTrenServer:CT.sym&&CT.sym.name,
+    giaCuoiCachDay_s:CT.lastSpot?((n-CT.lastSpot)/1e3).toFixed(1):null,goiBatKyCachDay_s:CT.lastMsg?((n-CT.lastMsg)/1e3).toFixed(1):null,
+    trendbarServerCachDay_s:CT.tbAt?((n-CT.tbAt)/1e3).toFixed(1):"chưa từng nhận",
+    nenLive:L&&{gio:L[0],o:L[1],h:L[2],l:L[3],c:L[4],v:L[5]},nenCuoiTrenChart:l&&{gio:l[0],c:l[4],v:l[5]},
+    barDirty:CT.barDirty,dangTaiM1:typeof loading!=="undefined"?loading:null,soNenM1:m1.length,
+    chartChoApDung_s:typeof CHW!=="undefined"?((n-CHW.applied)/1e3).toFixed(1):null,loiGanNhat:typeof CHW!=="undefined"?CHW.err:null,capHoiPhuc:typeof CHW!=="undefined"?CHW.lvl:null,
+     footprintSanSang:FPL.ready,tickLive_choXuLy:FPL.q.length,fpDangTai:typeof fpBusy!=="undefined"?fpBusy:null};
+  console.table(d);return d;
 }

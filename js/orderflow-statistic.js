@@ -18,8 +18,8 @@ let STC=null;
 function stCandle(c,i,step,cot,fl,Q,M,ck){
   const last=i===agg.length-1,lb=last&&m1.length?m1[m1.length-1]:null;
   const key=ck+(last?"|L"+FPLV+","+m1.length+(cot&&lb?","+lb[2]+","+lb[3]:""):"");
-  if(c._st&&c._st.k===key)return c._st;
-  const lv=new Map(),mins=[];let buy=0,sell=0,run=0,mx=0,mn=0;
+  if(c._st&&c._st.k===key&&fpSigOk(c,"_ss",FPM))return c._st;
+  fpSigSet(c,"_ss",FPM);const lv=new Map(),mins=[];let buy=0,sell=0,run=0,mx=0,mn=0;
   for(let t=c.st;t<c.st+C.tf;t+=60){const r=FPM.get(t);if(!r)continue;let d=0;
     for(let [p,b,s] of r){if(fl){if(b<Q.fmn||(Q.fmx>0&&b>Q.fmx))b=0;if(s<Q.fmn||(Q.fmx>0&&s>Q.fmx))s=0;if(!b&&!s)continue}const q=fpQ(p,step);let e=lv.get(q);if(!e){e=[0,0];lv.set(q,e)}e[0]+=s;e[1]+=b;buy+=b;sell+=s;d+=b-s}
     run+=d;if(run>mx)mx=run;if(run<mn)mn=run;mins.push([t,d])}
