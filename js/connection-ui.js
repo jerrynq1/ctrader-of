@@ -9,14 +9,18 @@ $("cSave").onclick=async()=>{
 /* ================= GIAO DIỆN: sidebar, theme, bầu trời sao ================= */
 const IC={chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M8 15l3-4 3 2 5-6"/></svg>',conn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v3"/></svg>'};
 IC.ind='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-8 5-8 8-3s5 3 10-8"/><path d="M3 21h18"/></svg>';
+IC.tpo='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="4" height="4"/><rect x="8" y="4" width="4" height="4"/><rect x="4" y="8" width="4" height="4"/><rect x="8" y="8" width="4" height="4"/><rect x="12" y="8" width="4" height="4"/><rect x="4" y="12" width="4" height="4"/><rect x="8" y="12" width="4" height="4"/><rect x="4" y="16" width="4" height="4"/><path d="M19 4v16"/></svg>';
+IC.tps='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>';
 IC.cs='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 1.5-2.2-.5-1.2.3-2.3 1.6-2.3H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg>';
-const V=[["chart","Chart"],["ind","Indicator"],["cs","Chart Setting"],["conn","Kết nối"]];
+const V=[["chart","Chart"],["tpo","TPO Chart"],["tps","TPO Setting"],["ind","Indicator"],["cs","Chart Setting"],["conn","Kết nối"]];
 let cur="chart";
 function show(v){
   cur=v;document.body.dataset.v=v;V.forEach(([k])=>$("v-"+k).classList.toggle("on",k===v));
   $("nav").innerHTML=V.map(([k,n])=>`<button class="sb${k===v?" on":""}" data-v="${k}" title="${n}"><span class="ic">${IC[k]}</span><span class="lb">${n}</span></button>`).join("");
   if(v==="ind")buildInd();
   if(v==="cs")buildCS();
+  if(v==="tpo")tpoShow();
+  if(v==="tps")buildTPS();
   if(v==="conn"){const g=ctCfg();$("cId").value=g.clientId;$("cSec").value=g.clientSecret;$("cTok").value=g.accessToken;$("cAcc").value=g.accountId||"";$("cEnv").value=g.env}
   document.body.classList.remove("so");
 }

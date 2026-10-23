@@ -107,7 +107,7 @@ function setLang(l){
   walk(document.body);
   chartLocale();
 }
-window.I18N={set:setLang,get:()=>lang};
+window.I18N={set:setLang,get:()=>lang,tr:s=>conv(String(s))};
 
 new MutationObserver(ms=>{
   for(const m of ms){

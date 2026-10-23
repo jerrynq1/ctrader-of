@@ -465,10 +465,55 @@ const T=[
 ["Màu đường Bid","Bid line color","买价线颜色"],
 ["Màu đường Ask","Ask line color","卖价线颜色"],
 
+/* --- TPO Chart / TPO Setting --- */
+["TPO Chart","TPO Chart","TPO 图表"],
+["TPO Setting","TPO Settings","TPO 设置"],
+["⚙ TPO Setting","⚙ TPO Settings","⚙ TPO 设置"],
+["Kéo để cuộn · lăn chuột / chụm 2 ngón để zoom · nhấp đúp để về Live","Drag to scroll · mouse wheel / pinch to zoom · double-click to go Live","拖动滚动 · 滚轮 / 双指缩放 · 双击回到实时"],
+["TPO cần nến M1 trở lên. Hãy chọn khung từ M1 ở tab Chart.","TPO needs M1 candles or higher. Pick a timeframe of M1 or above in the Chart tab.","TPO 需要 M1 及以上周期。请在图表页选择 M1 或更高周期。"],
+["Đang tải nến…","Loading candles…","正在加载K线…"],
+["Chưa có nến M1 (kiểm tra kết nối cTrader ở tab Kết nối).","No M1 candles yet (check the cTrader connection in the Connection tab).","暂无 M1 K线（请在连接页检查 cTrader 连接）。"],
+["ô","cell","方块"],
+["(chưa có tick volume nên Δ = 0)","(no tick volume yet, so Δ = 0)","（暂无 tick 成交量，因此 Δ = 0）"],
+["Ô TPO","TPO cells","TPO 方块"],
+["Cỡ ô (px)","Cell size (px)","方块大小 (px)"],
+["Cũng chỉnh được bằng zoom trên chart","Can also be changed by zooming the chart","也可通过缩放图表调整"],
+["Tỉ lệ ngang / dọc","Width / height ratio","宽 / 高比例"],
+["1 = ô vuông","1 = square cell","1 = 正方形"],
+["Hiện chữ cái trong ô","Show letters in cells","在方块中显示字母"],
+["Open / Close","Open / Close","开盘 / 收盘"],
+["Delta Profile (bên phải)","Delta Profile (right side)","Delta Profile（右侧）"],
+["Single Print","Single Print","Single Print（单一印记）"],
+["Kéo dài POC / VA / Single Print","Extend POC / VA / Single Print","延长 POC / VA / Single Print"],
+["Nhãn H / L / VAH / VAL / POC","H / L / VAH / VAL / POC labels","H / L / VAH / VAL / POC 标签"],
+["Chu kỳ mỗi ô (phút)","Period per cell (minutes)","每个方块的周期（分钟）"],
+["Số ngày hiển thị","Days to show","显示天数"],
+["Tự tải thêm nến M1 cũ nếu thiếu","Older M1 candles are loaded automatically if missing","数据不足时自动加载更早的 M1 K线"],
+["Kích thước hàng giá","Price row size","价格行大小"],
+["0 = tự động (≈ 70 hàng cho 1 ngày)","0 = auto (≈ 70 rows per day)","0 = 自动（每天约 70 行）"],
+["Màu","Colors","颜色"],
+["Màu ô số 1","Cell color 1","方块颜色 1"],
+["Màu ô số 2","Cell color 2","方块颜色 2"],
+["Màu ô số 3","Cell color 3","方块颜色 3"],
+["Màu ô số 4","Cell color 4","方块颜色 4"],
+["Số ô cho một vòng màu","Cells per color cycle","每轮颜色的方块数"],
+["Màu ô lặp lại sau chừng này nến","Cell colors repeat after this many candles","颜色在这么多根K线后重复"],
+["Độ đậm ngoài Value Area","Opacity outside Value Area","价值区域外的不透明度"],
+["VAH / VAL","VAH / VAL","VAH / VAL"],
+["Thanh Open","Open bar","Open 标记条"],
+["Nhãn Close","Close label","Close 标签"],
+["Delta mua","Delta buy","Delta 买入"],
+["Delta bán","Delta sell","Delta 卖出"],
+["Vạch Δ lớn nhất","Largest Δ line","最大 Δ 线"],
+["Gexadecimal (theo theme)","Gexadecimal (follows theme)","Gexadecimal（跟随主题）"],
+["Cầu vồng (như mẫu)","Rainbow (like the sample)","彩虹（参考样图）"],
+["Vàng đơn sắc","Mono gold","单色金"],
+["Xanh – Tím","Green – Purple","绿 – 紫"],
+["Live","Live","实时"],
 ];
 
 /* Chữ gốc tiếng Anh trong app: hiển thị bằng tiếng Việt khi chọn Tiếng Việt */
-const VIO=new Map([["Chart","Biểu đồ"],["Indicator","Chỉ báo"],["Chart Setting","Cài đặt biểu đồ"],["ƒx Indicator","ƒx Chỉ báo"],["Symbol","Mã"]]);
+const VIO=new Map([["Chart","Biểu đồ"],["Indicator","Chỉ báo"],["Chart Setting","Cài đặt biểu đồ"],["ƒx Indicator","ƒx Chỉ báo"],["Symbol","Mã"],["TPO Chart","Biểu đồ TPO"],["TPO Setting","Cài đặt TPO"],["⚙ TPO Setting","⚙ Cài đặt TPO"]]);
 
 /* Cụm nằm lẫn trong câu dài (thông báo lỗi, hậu tố...) */
 const PARTS=[
