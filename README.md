@@ -102,6 +102,12 @@ Bấm **F12 > Console**. Thanh trạng thái trên chart hiện lý do (sai Clie
 - **Bỏ chọn:** chạm nhẹ vào chỗ trống. Kéo / zoom chart không làm mất chọn.
 - Chuột trên máy tính giữ nguyên như cũ. Code: `tpStart` / `cancelTp` trong `js/drawings-interact.js`.
 
+## Toàn màn hình chart (v27)
+
+- Sửa lỗi "hình mờ": khi toàn màn hình, thanh công cụ (mã, khung giờ, Indicator, Bid/Ask) và chart phụ phía sau lộ ra mờ mờ và vẫn bấm được vì nền thẻ chart bị `style.css` làm trong suốt. Giờ nền đặc và các phần phía sau bị ẩn hẳn khi đang toàn màn hình (CSS trong `js/mobile.js`, các rule `body.cfs ...`).
+- **Máy tính:** có nút toàn màn hình ở góc trên bên phải chart (cạnh trục giá). Bấm vào sẽ vào toàn màn hình thật của trình duyệt (Fullscreen API). Thoát bằng nút **X** ở thanh trên, phím **Esc**, hoặc nút Back. Khung giờ đổi được ngay trên thanh trên khi toàn màn hình.
+- Điện thoại: giữ nguyên cụm nút nổi (có nút toàn màn hình) như cũ.
+
 ## Chống đứng chart (v19)
 
 Lỗi cũ: Bid/Ask vẫn nhảy nhưng nến + footprint đứng im. Nguyên nhân: `poll()` ghi Bid/Ask ra màn hình rồi mới cập nhật nến, nên chỉ cần 1 bước phía sau ném lỗi (vẽ đường Bid/Ask, `cs.update` lệch thời gian, tính chỉ báo...) hoặc cờ `loading` bị kẹt thì phần còn lại dừng hẳn.
