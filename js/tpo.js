@@ -158,7 +158,7 @@ function tpoPaint(g,W,H,AX,BH,L,vw,s,K,px,ch){
 }
 /* ---- chart chính của tab TPO ---- */
 const LET="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",TAX=66,TBH=26,TMX=24;
-const tcv=$("tpoC"),tpg=tcv.getContext("2d");let TPW=0,TPH=0,TV={sx:0,cp:null,follow:true,ch:null,sym:""};
+const tcv=$("tpoC"),tpg=tcv.getContext("2d");let TPW=0,TPH=0,TV={sx:0,cp:null,follow:true,ch:null,sym:"",mode:"none"};
 const tpoOn=()=>$("v-tpo").classList.contains("on");
 function tpoMsg(t){tpg.clearRect(0,0,TPW,TPH+TBH);tpg.fillStyle=tvar("--mut");tpg.font="14px Space Grotesk,system-ui,sans-serif";tpg.textAlign="left";tpg.textBaseline="middle";tpg.fillText(L10(t),16,40);$("tpoInfo").textContent=""}
 function tpoDraw(){
@@ -174,32 +174,48 @@ function tpoDraw(){
   TV.sx=Math.max(-PW*.5,Math.min(TV.sx,total*cw-PW*.4));
   const px=BA&&BA.sym===C.sym&&BA.bid>0?BA.bid:lp,K=tpoCol();
   const f=tpoPaint(tpg,TPW,TPH,TAX,TBH,L,{cw,rh,sx:TV.sx,cp:TV.cp,u:D.u},s,K,px,TV.ch),T=(f||last).T,dc=pd();
-  $("tpoInfo").textContent=tdl((f||last).d)+"  O "+tfm(T.open,dc)+"  H "+tfm(T.h,dc)+"  L "+tfm(T.l,dc)+"  C "+tfm(T.close,dc)+"  ·  POC "+tfm((T.lo+T.poc+.5)*T.bp,dc)+"  VAH "+tfm((T.lo+T.vh+1)*T.bp,dc)+"  VAL "+tfm((T.lo+T.vl)*T.bp,dc)+"  ·  Δ "+tfd(T.dsum)+"  Vol "+Math.round(T.vsum)+"  ·  "+L10("ô")+" "+tfm(D.u,dc)+(T.vsum<=0?"  "+L10("(chưa có tick volume nên Δ = 0)"):"");
+  $("tpoInfo").textContent="O: "+tfm(T.open,dc)+"   H: "+tfm(T.h,dc)+"   L: "+tfm(T.l,dc)+"   C: "+tfm(T.close,dc);
 }
 let tpoRq=0;const tpoRedraw=()=>{tpoRq||(tpoRq=requestAnimationFrame(()=>{tpoRq=0;tpoDraw()}))};
 function tpoSize(){const r=$("tpoCard").getBoundingClientRect(),d=devicePixelRatio||1;if(r.width<2)return;TPW=r.width-12;TPH=r.height-12-TBH;tcv.width=TPW*d;tcv.height=(TPH+TBH)*d;tcv.style.width=TPW+"px";tcv.style.height=(TPH+TBH)+"px";tpg.setTransform(d,0,0,d,0,0);tpoRedraw()}
 new ResizeObserver(tpoSize).observe($("tpoCard"));
 function tpoShow(){tpoSize();$("tpoSym").textContent=C.sym+" · "+tfName(C.tf);tpoRedraw()}
-function tpoZoom(cx,cy,f){
-  const s=tpS(),oc=s.cell,nc=Math.max(4,Math.min(40,oc*f)),cw=oc*s.asp,ncw=nc*s.asp,u=TPC.u||1;
-  TV.sx=(TV.sx+cx)/cw*ncw-cx;const p=TV.cp+(TPH/2-cy)/oc*u;TV.cp=p-(TPH/2-cy)/nc*u;TPO_S.cell=nc;tpoRedraw();
+const tcl=(x,lo,hi)=>x<lo?lo:x>hi?hi:x;
+function tpoZoom(cx,cy,fx,fy){   // zoom độc lập: fx = ngang (độ rộng ô), fy = dọc (chiều cao ô)
+  const s=tpS(),rh=s.cell,cw=rh*s.asp,u=TPC.u||1,nrh=tcl(rh*fy,4,40),ncw=tcl(cw*fx,3,60);
+  TV.sx=(TV.sx+cx)/cw*ncw-cx;const p=TV.cp+(TPH/2-cy)/rh*u;TV.cp=p-(TPH/2-cy)/nrh*u;
+  TPO_S.cell=nrh;TPO_S.asp=ncw/nrh;tpoRedraw();
 }
-const tptr=new Map(),tdist=()=>{const a=[...tptr.values()];return Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1};let tpd=1;
-tcv.onpointerdown=e=>{TV.ch=[e.offsetX,e.offsetY];tcv.setPointerCapture(e.pointerId);tptr.set(e.pointerId,[e.offsetX,e.offsetY]);if(tptr.size===2)tpd=tdist()};
+const tptr=new Map(),tspan=()=>{const a=[...tptr.values()];return[Math.abs(a[0][0]-a[1][0]),Math.abs(a[0][1]-a[1][1])]};
+tcv.onpointerdown=e=>{
+  tcv.setPointerCapture(e.pointerId);tptr.set(e.pointerId,[e.offsetX,e.offsetY]);
+  TV.mode=tptr.size>1?"pinch":e.offsetX>TPW-TAX?"y":e.offsetY>TPH?"x":"pan";   // chạm trục giá = zoom dọc, trục giờ = zoom ngang
+  TV.ch=TV.mode==="pan"?[e.offsetX,e.offsetY]:null;tpoRedraw();
+};
 tcv.onpointermove=e=>{
   const o=tptr.get(e.pointerId);
   if(!o){if(e.pointerType==="mouse"){TV.ch=[e.offsetX,e.offsetY];tpoRedraw()}return}
-  const n=[e.offsetX,e.offsetY];tptr.set(e.pointerId,n);TV.ch=n;
-  if(tptr.size===1){const dx=n[0]-o[0],dy=n[1]-o[1];if(dx){TV.follow=false;$("tpoLive").classList.remove("on");TV.sx-=dx}TV.cp+=dy/tpS().cell*(TPC.u||1)}
-  else if(tptr.size===2){const d=tdist(),a=[...tptr.values()];tpoZoom((a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2,d/tpd);tpd=d}
-  tpoRedraw();
+  const n=[e.offsetX,e.offsetY];
+  if(tptr.size>=2){   // chụm 2 ngón: tách theo trục — ngón xa nhau theo chiều ngang thì zoom ngang, chiều dọc thì zoom dọc
+    const[ox,oy]=tspan();tptr.set(e.pointerId,n);const[nx,ny]=tspan(),a=[...tptr.values()];TV.ch=null;
+    let fx=ox>40?nx/ox:1,fy=oy>40?ny/oy:1;if(ox<=40&&oy<=40)fx=fy=Math.hypot(nx,ny)/(Math.hypot(ox,oy)||1);
+    tpoZoom((a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2,fx,fy);return;
+  }
+  tptr.set(e.pointerId,n);const dx=n[0]-o[0],dy=n[1]-o[1];
+  if(TV.mode==="y")tpoZoom(0,TPH/2,1,Math.exp(-dy/200));
+  else if(TV.mode==="x")tpoZoom((TPW-TAX)/2,0,Math.exp(dx/300),1);
+  else{TV.ch=n;if(dx){TV.follow=false;$("tpoLive").classList.remove("on");TV.sx-=dx}TV.cp+=dy/tpS().cell*(TPC.u||1);tpoRedraw()}
 };
-tcv.onpointerup=tcv.onpointercancel=e=>{tptr.delete(e.pointerId);saveTP();if(e.pointerType!=="mouse"){TV.ch=null;tpoRedraw()}};
+tcv.onpointerup=tcv.onpointercancel=e=>{tptr.delete(e.pointerId);saveTP();if(e.pointerType!=="mouse"||tptr.size){TV.ch=null;tpoRedraw()}if(tptr.size===1)TV.mode="none"};
 tcv.onpointerleave=()=>{TV.ch=null;tpoRedraw()};
-tcv.onwheel=e=>{e.preventDefault();tpoZoom(e.offsetX,e.offsetY,Math.exp(-e.deltaY*.0015));clearTimeout(tcv._w);tcv._w=setTimeout(saveTP,400)};
+tcv.onwheel=e=>{   // lăn trên trục giá = zoom dọc, trên trục giờ = zoom ngang, còn lại zoom cả hai
+  e.preventDefault();const f=Math.exp(-e.deltaY*.0015),ox=e.offsetX>TPW-TAX,oy=e.offsetY>TPH;
+  tpoZoom(e.offsetX,e.offsetY,ox?1:f,oy?1:f);clearTimeout(tcv._w);tcv._w=setTimeout(saveTP,400);
+};
 const tpoLive=()=>{TV.follow=true;TV.cp=null;$("tpoLive").classList.add("on");tpoRedraw()};
 tcv.ondblclick=tpoLive;$("tpoLive").onclick=tpoLive;
-$("tpoZi").onclick=()=>{tpoZoom((TPW-TAX)/2,TPH/2,1.25);saveTP()};$("tpoZo").onclick=()=>{tpoZoom((TPW-TAX)/2,TPH/2,.8);saveTP()};
+$("tpoZi").onclick=()=>{tpoZoom((TPW-TAX)/2,TPH/2,1.25,1.25);saveTP()};$("tpoZo").onclick=()=>{tpoZoom((TPW-TAX)/2,TPH/2,.8,.8);saveTP()};
+$("tpoSq").onclick=()=>{TPO_S.asp=1;saveTP();tpoRedraw()};
 $("tpoSet").onclick=()=>show("tps");
 setInterval(()=>{if(!document.hidden&&tpoOn()){if(TV.follow)$("tpoSym").textContent=C.sym+" · "+tfName(C.tf);tpoRedraw()}},500);
 /* ---- tab TPO Setting ---- */
@@ -220,7 +236,7 @@ function buildTPS(){
   const chk=(l,k)=>`<div class="f"><label for="tp_${k}">${l}</label><input type="checkbox" id="tp_${k}" data-t="${k}"${s[k]?" checked":""}></div>`;
   const col=(l,k,v)=>`<div class="f"><label for="tp_${k}">${l}</label><input type="color" id="tp_${k}" data-c="${k}" value="${v}"></div>`;
   $("tpsBody").innerHTML=`<div class="grid"><div class="card"><h2>Ô TPO</h2>`+
-   num("Cỡ ô (px)","cell",4,40,1,"Cũng chỉnh được bằng zoom trên chart")+num("Tỉ lệ ngang / dọc","asp",.5,2,.1,"1 = ô vuông")+chk("Hiện chữ cái trong ô","letters")+chk("Open / Close","showOC")+chk("Delta Profile (bên phải)","showDelta")+chk("Single Print","showSp")+chk("Kéo dài POC / VA / Single Print","showExt")+chk("Nhãn H / L / VAH / VAL / POC","showLbl")+
+   num("Cỡ ô (px)","cell",4,40,1,"Cũng chỉnh được bằng zoom trên chart")+num("Tỉ lệ ngang / dọc","asp",.2,4,.05,"1 = ô vuông")+chk("Hiện chữ cái trong ô","letters")+chk("Open / Close","showOC")+chk("Delta Profile (bên phải)","showDelta")+chk("Single Print","showSp")+chk("Kéo dài POC / VA / Single Print","showExt")+chk("Nhãn H / L / VAH / VAL / POC","showLbl")+
    `<h2 style="margin-top:16px">Dữ liệu</h2>`+
    `<div class="f"><label for="tp_per">Chu kỳ mỗi ô (phút)</label><select id="tp_per" data-n="per">${[15,30,60].map(v=>`<option value="${v}"${s.per===v?" selected":""}>${v}</option>`).join("")}</select></div>`+
    num("Số ngày hiển thị","days",1,15,1,"Tự tải thêm nến M1 cũ nếu thiếu")+num("Kích thước hàng giá","tick",0,1000,"any","0 = tự động (≈ 70 hàng cho 1 ngày)")+num("Value Area (%)","va",50,95,1)+
