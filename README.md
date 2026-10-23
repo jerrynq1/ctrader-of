@@ -72,7 +72,7 @@ Bấm **F12 > Console**. Thanh trạng thái trên chart hiện lý do (sai Clie
 - Statistic cache số liệu theo từng nến, mỗi tick live chỉ tính lại nến cuối (trước: tính lại toàn bộ lịch sử mỗi 250ms).
 - Nến M1 và tick footprint đi hai làn riêng (chung giới hạn 5 req/s), tick tải nặng không còn chặn việc đổi mã / khung / tải nến.
 - Watchdog (`ctWatch` trong `ctrader.js`): im > 20s thì thăm dò, không trả lời thì tự nối lại; có kết nối mà > 60s không có giá thì đăng ký lại spot. Tab hiện lại / có mạng lại cũng kiểm tra ngay.
-- Chạy kiểm tra: `node tests/footprint.test.js && node tests/connection.test.js`
+- Chạy kiểm tra: `node tests/footprint.test.js && node tests/connection.test.js && node tests/tpo.test.js`
 - Nến live (v16): mỗi tick bid kéo high/low/close của nến phút hiện tại, không phụ thuộc server có gửi trendbar hay không. Chỉ báo cập nhật tối đa ~3 lần/giây.
 - Chart đứng thì mở Console (F12) gõ `ctDiag()` để xem đang kẹt ở đâu.
 - v17: tự bù nến M1 bị thiếu khi tab ẩn / máy ngủ / mạng chập (`catchUp` trong `chart.js`); cache số liệu của nến đã đóng kiểm tra thêm chữ ký dữ liệu (`fpSigOk`) nên không giữ số liệu cũ khi phút cuối được chốt muộn.
