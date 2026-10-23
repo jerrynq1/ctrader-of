@@ -50,12 +50,12 @@ js/
   7. POC hòa thì lấy hàng gần giữa nến; Value Area theo phương pháp CME (so tổng 2 hàng trên với 2 hàng dưới); Imbalance chéo kèm lọc volume tối thiểu và Stacked imbalance.
   Nếu broker không lưu đủ tick lịch sử, góc chart sẽ báo % số phút có dữ liệu.
 - **Volume Profile**: tổng volume mỗi phút lấy từ tick volume của nến M1. Phân bổ vào từng mức giá: (1) theo footprint thật từ tick nếu phút đó đã được tải (bật Footprint / Big Trade / Statistic), giá mua quy về hệ Bid bằng spread trung bình của phút; (2) nếu không có tick thì theo đường đi của giá trong nến (tăng O→L→H→C, giảm O→H→L→C), đoạn lên là Ask, đoạn xuống là Bid. Hàng giá tính bằng số nguyên, POC hòa thì lấy hàng gần giữa, Value Area theo CME. Góc profile ghi nguồn dữ liệu (Tick xx% / M1).
-- Giới hạn của cTrader: 5 request lịch sử / giây (app tự giãn nhịp), lịch sử tick chỉ có trong một số ngày gần đây tuỳ broker. Tick footprint cũng tải theo vùng đang xem (kéo chart tới đâu tải tới đó), có trần an toàn 14 ngày gần nhất (`FP_MAXD` trong `orderflow-footprint.js`) vì tick rất nặng.
+- Giới hạn của cTrader: 5 request lịch sử / giây (app tự giãn nhịp; nến M1 và tick có làn riêng nên tick không chặn nến), lịch sử tick chỉ có trong một số ngày gần đây tuỳ broker. Tick footprint cũng tải theo vùng đang xem (kéo chart tới đâu tải tới đó), có trần an toàn 3 ngày gần nhất (`FP_MAXD` trong `orderflow-footprint.js`) vì tick rất nặng.
 - Không còn lưu trữ D1/R2: mỗi lần mở trang sẽ tải lại từ cTrader.
 
 ## Khi sửa file về sau
 
-- Sau mỗi lần sửa, đổi `?v=14` thành `?v=15` trong `index.html` để trình duyệt tải lại file mới.
+- Sau mỗi lần sửa, đổi `?v=15` thành `?v=16` trong `index.html` để trình duyệt tải lại file mới.
 - **Không đổi thứ tự** các dòng `<script>` (các file dùng chung biến toàn cục).
 - Tránh đặt tên biến trùng với tên đã có ở file khác (hai file khai báo cùng một `const` sẽ làm file sau không chạy).
 
@@ -66,3 +66,10 @@ js/
 ## Khi lỗi
 
 Bấm **F12 > Console**. Thanh trạng thái trên chart hiện lý do (sai Client ID/Secret, token hết hạn, sai tên mã, mạng chặn `wss://live.ctraderapi.com:5036`...).
+
+## Chống đơ giá (v15)
+
+- Statistic cache số liệu theo từng nến, mỗi tick live chỉ tính lại nến cuối (trước: tính lại toàn bộ lịch sử mỗi 250ms).
+- Nến M1 và tick footprint đi hai làn riêng (chung giới hạn 5 req/s), tick tải nặng không còn chặn việc đổi mã / khung / tải nến.
+- Watchdog (`ctWatch` trong `ctrader.js`): im > 20s thì thăm dò, không trả lời thì tự nối lại; có kết nối mà > 60s không có giá thì đăng ký lại spot. Tab hiện lại / có mạng lại cũng kiểm tra ngay.
+- Chạy kiểm tra: `node tests/footprint.test.js && node tests/connection.test.js`
