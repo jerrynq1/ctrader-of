@@ -183,7 +183,7 @@ function renderInd(){
   if(!agg.length){legend();return}
   const R=calcAll(),E=eff(),tx=COL().tx;
   ACT.forEach((a,i)=>{
-    if(!R[i])return;const def=IND[a.key],pn=def.t==="osc"?PN[a.id]:null,ch=pn?pn.ch:chart,rs=R[i],ss=new Array(rs.length).fill(null),pf=pfOf(def,rs);
+    if(!R[i])return;const def=IND[a.key],pn=def.t==="osc"?PN[a.id]:null,ch=pn?pn.ch:chart,rs=R[i],ss=new Array(rs.length).fill(null),pf=pfOf(def,rs)||(ch===chart&&def.t==="ov"?priceFmt():null);   // chỉ báo chồng lên giá: cùng số lẻ với mã
     const go=(s,j)=>{try{
       const ser=mkSer(ch,a,s,pf,E);ser.setData(s.data);
       if(s.mk&&s.mk.length)ser.setMarkers([...s.mk].sort((x,y)=>x.time-y.time));
@@ -241,7 +241,7 @@ function legend(p){
   const card=$("chartCard"),i=p&&p.time!=null?idxOf(p.time):-2;
   ACT.forEach(a=>{const r=card.querySelector(`[data-id="${a.id}"] .lvs`);if(!r)return;
     const ms=SM[a.id];if(!isOn(a)||!ms){r.innerHTML="";return}
-    const F=IND[a.key].fm==="vol"?fmtV:fv;
+    const F=IND[a.key].fm==="vol"?fmtV:IND[a.key].t==="ov"?(v=>(+v).toFixed(PDIG())):fv;
     r.innerHTML=ms.map((m,j)=>{if(!m.lg)return"";
       const raw=RAW[a.id]&&RAW[a.id][j],v=i===-2?(LV[a.id]||[])[j]:(i>=0&&raw?val(raw[i]):null),
         it=raw?(i===-2?lastI(raw):i>=0?raw[i]:null):null,col=m.ci!=null?cres(a,m.ci):(it&&(it.c||it.col))||"inherit";

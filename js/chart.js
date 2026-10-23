@@ -6,10 +6,24 @@ const COL=()=>P.theme==="dark"?{up:"#3df5c0",dn:"#ff5c8a",tx:"#c4b79a",gr:"rgba(
 const chart=LightweightCharts.createChart($("chart"),{layout:{background:{color:"transparent"},textColor:"#c4b79a",fontFamily:"Space Grotesk"},rightPriceScale:{borderColor:"rgba(244,201,106,.22)"},timeScale:{timeVisible:true,secondsVisible:false},crosshair:{mode:0},autoSize:true});
 const cs=chart.addCandlestickSeries({borderVisible:false});
 const vs=chart.addHistogramSeries({priceFormat:{type:"volume"},priceScaleId:"vol"});
+/* ===== Số lẻ của giá theo từng mã =====
+   Trước đây series nến không đặt priceFormat nên lightweight-charts dùng mặc định 2 số lẻ (minMove 0.01): vàng (2 số lẻ) hiện đúng nhưng EURUSD/GBPUSD (5 số lẻ) bị làm tròn thành 1.34.
+   Giờ: lấy số lẻ (digits) broker báo cho mã đang xem (CT.sym.digits). Nếu chưa có thì suy ra từ chính dữ liệu giá (số lẻ nhiều nhất của các nến gần nhất). */
+function PDIG(){
+  const d=typeof CT!=="undefined"&&CT.sym?+CT.sym.digits:NaN;
+  if(Number.isInteger(d)&&d>=0&&d<=10)return d;
+  let m=0;for(let i=agg.length-1,k=0;i>=0&&k<60;i--,k++){const x=agg[i];for(const v of[x.open,x.high,x.low,x.close]){const s=String(+(+v).toFixed(8)),p=s.indexOf(".");if(p>=0&&s.length-p-1>m)m=s.length-p-1}}
+  return Math.max(2,Math.min(8,m))}
+const priceFmt=()=>{const d=PDIG();return{type:"price",precision:d,minMove:+Math.pow(10,-d).toFixed(d)}};
+let pfDig=-1;
+function applyPrec(){                              // đặt lại định dạng giá của trục + nhãn khi số lẻ đổi (đổi mã)
+  const d=PDIG();if(d===pfDig)return;pfDig=d;
+  try{cs.applyOptions({priceFormat:priceFmt()})}catch(e){}
+}
 chart.priceScale("vol").applyOptions({scaleMargins:{top:.85,bottom:0}});
 const PN={};                                   // id chỉ báo -> {el,ch,lg,series,raw}: mỗi chỉ báo dao động có 1 chart riêng bên dưới
 const allCh=()=>[chart,...Object.values(PN).map(p=>p.ch)];
-chart.subscribeCrosshairMove(p=>{const d=p.seriesData&&p.seriesData.get(cs);$("ohlc").textContent=d?`O ${d.open}   H ${d.high}   L ${d.low}   C ${d.close}`:""});
+chart.subscribeCrosshairMove(p=>{const d=p.seriesData&&p.seriesData.get(cs);{const f=v=>(+v).toFixed(PDIG());$("ohlc").textContent=d?`O ${f(d.open)}   H ${f(d.high)}   L ${f(d.low)}   C ${f(d.close)}`:""}});
 function themeChart(){
   const c=COL();
   allCh().forEach(x=>x.applyOptions({layout:{textColor:c.tx},rightPriceScale:{borderColor:c.bd},timeScale:{borderColor:c.bd}}));
@@ -108,6 +122,7 @@ function rebuild(fit){
   // đổi sang giờ hiển thị; chart cần thời gian tăng dần, nên lúc đổi giờ mùa làm giờ lùi lại thì bỏ các nến trùng giờ
   agg=[];let lastT=-1;
   for(const b of raw){b.time=disp(b.st);if(b.time>lastT){agg.push(b);lastT=b.time}}
+  applyPrec();
   cs.setData(agg);
   vs.setData(agg.map(c=>({time:c.time,value:c.v,color:vcol(c.open,c.close)})));
   if(fit)chart.timeScale().scrollToRealTime();   // đổi khung giờ: về nến mới nhất (dữ liệu cũ hơn tự tải khi kéo sang trái)

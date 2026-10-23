@@ -471,6 +471,7 @@ const T=[
 ["⚙ TPO Setting","⚙ TPO Settings","⚙ TPO 设置"],
 ["Kéo để cuộn · chụm 2 ngón / lăn chuột để zoom · kéo trục giá hoặc trục giờ để zoom riêng từng chiều · nhấp đúp để về Live","Drag to scroll · pinch / mouse wheel to zoom · drag the price or time axis to zoom one direction · double-tap to go Live","拖动滚动 · 双指 / 滚轮缩放 · 拖动价格轴或时间轴可单独缩放一个方向 · 双击回到实时"],
 ["Ô vuông","Square cells","正方形方块"],
+["Đang tải các ngày trước đó…","Loading previous days…","正在加载之前的交易日…"],
 ["TPO cần nến M1 trở lên. Hãy chọn khung từ M1 ở tab Chart.","TPO needs M1 candles or higher. Pick a timeframe of M1 or above in the Chart tab.","TPO 需要 M1 及以上周期。请在图表页选择 M1 或更高周期。"],
 ["Đang tải nến…","Loading candles…","正在加载K线…"],
 ["Chưa có nến M1 (kiểm tra kết nối cTrader ở tab Kết nối).","No M1 candles yet (check the cTrader connection in the Connection tab).","暂无 M1 K线（请在连接页检查 cTrader 连接）。"],

@@ -89,12 +89,12 @@ function tline(d,lo,hi,mid,L1,R1){
   if(Math.hypot(R1[0]-L1[0],R1[1]-L1[1])<w+2*pad+16){seg(L1,R1);return}
   const q=[[s0,-h],[s1,-h],[s1,h],[s0,h]].map(([u,t])=>[A[0]+ux*u+nx*t,A[1]+uy*u+ny*t]);
   ctx.save();ctx.beginPath();ctx.rect(-1e4,-1e4,2e4,2e4);ctx.moveTo(q[0][0],q[0][1]);q.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));ctx.closePath();ctx.clip("evenodd");seg(L1,R1);ctx.restore()}
-const pd=()=>{const l=n()?String(+agg[n()-1].close.toFixed(8)):"";return Math.max(2,Math.min(8,(l.split(".")[1]||"").length))};
+const pd=()=>PDIG();
 const cdy=(d,a)=>cs.priceToCoordinate(d.pts[0].p+(d.off||0))-a[1];
 function boxTxt(d,P){const fs=d.fs||14,ha=d.ha||"c",va=d.va||"m",xs=P.map(p=>p[0]),ys=P.map(p=>p[1]),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
   ctx.save();ctx.setLineDash([]);ctx.font=font(fs,d.b,d.i);ctx.fillStyle=d.tc||col(d);ctx.textAlign=ha==="l"?"left":ha==="r"?"right":"center";ctx.textBaseline=va==="t"?"top":va==="b"?"bottom":"middle";
   ctx.fillText(d.x,ha==="l"?x0+8:ha==="r"?x1-8:(x0+x1)/2,va==="t"?y0+6:va==="b"?y1-6:(y0+y1)/2);ctx.restore()}
 function arrow(p,q,c){const a=Math.atan2(p[1]-q[1],p[0]-q[0]);ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(p[0]-11*Math.cos(a-.4),p[1]-11*Math.sin(a-.4));ctx.lineTo(p[0]-11*Math.cos(a+.4),p[1]-11*Math.sin(a+.4));ctx.fill()}
 function pill(t,cx,cy,bg){ctx.setLineDash([]);ctx.font=font(12,1);const w=ctx.measureText(t).width+16,x=Math.max(2,Math.min(cx-w/2,plot()[0]-w-2));ctx.fillStyle=bg;ctx.beginPath();ctx.roundRect(x,cy-11,w,22,6);ctx.fill();ctx.fillStyle="#fff";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(t,x+w/2,cy+1)}
-function posI(d){const e=d.pts[0].p,tp=d.pts[1].p,sl=d.pts[2].p,last=n()?agg[n()-1].close:e,risk=Math.abs(e-sl)||1e-9,qty=d.qt>0?d.qt:+((d.ac||1000)*(d.rk==null?1:d.rk)/100/risk).toFixed(2),dec=(String(last).split(".")[1]||"").length;
+function posI(d){const e=d.pts[0].p,tp=d.pts[1].p,sl=d.pts[2].p,last=n()?agg[n()-1].close:e,risk=Math.abs(e-sl)||1e-9,qty=d.qt>0?d.qt:+((d.ac||1000)*(d.rk==null?1:d.rk)/100/risk).toFixed(2),dec=PDIG();
   return{e,qty,pnl:qty*(last-e)*(d.k==="long"?1:-1),rr:Math.abs(tp-e)/risk,t:Math.abs(tp-e),s:Math.abs(e-sl),tk:Math.pow(10,-dec)}}

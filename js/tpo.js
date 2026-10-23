@@ -2,7 +2,7 @@
    Dữ liệu: m1 của chart chính (m1[i] = [giờ server, open, high, low, close, tickVolume]); ngày = ngày server (cắt 17:00 NY như D1), mỗi ô = 1 nến TPO (mặc định 30 phút).
    Delta Profile: có tick (FPM) thì dùng Ask/Bid thật từ tick, không có thì mô hình đường đi của giá trong nến M1 (giống volume-profile.js): đoạn lên = mua, đoạn xuống = bán.
    Value Area theo CME (so 2 hàng trên với 2 hàng dưới). Cài đặt riêng nằm ở tab "TPO Setting" (lưu ở "tp_tpo"). */
-const TPO_D={cell:14,asp:1,letters:false,tick:0,per:30,va:70,days:5,cyc:12,outA:.4,stops:null,showSp:true,showExt:true,showDelta:true,showLbl:true,showOC:true};
+const TPO_D={cell:14,asp:1,lt:true,tick:0,per:30,va:70,days:5,cyc:12,outA:.4,stops:null,showSp:true,showExt:true,showDelta:true,showLbl:true,showOC:true};
 let TPO_S={};try{TPO_S=JSON.parse(ld("tp_tpo","{}"))||{}}catch{}
 const tpS=()=>Object.assign({},TPO_D,TPO_S),saveTP=()=>sv("tp_tpo",JSON.stringify(TPO_S));
 const tvar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -53,10 +53,10 @@ function tpoDay(d,B,tk,ps,vaP,useTk){
   let tU=5;for(let i=0;i<n;i++)tU=Math.max(tU,cnt[i]+(i===oR?6:0)+(i===cR?7:0));
   return{lo:b0,bp:bI/U,n,per:pl,cnt,vol,dl,dp,poc,vl:b,vh:t,sp,oR,cR,tU,h,l,open:B[0][1],close:B[B.length-1][4],dsum:dl.reduce((a,c)=>a+c,0),vsum:vol.reduce((a,c)=>a+c,0)};
 }
-const TPC={sig:"",days:[],u:0,have:0};
+const TPC={sig:"",days:[],u:0,have:0,tkKey:"",tkv:0};
 function tpoData(){
   const s=tpS(),N=m1.length;if(!N)return null;
-  const useTk=typeof FPM!=="undefined"&&FPM.size>0,x=m1[N-1],sig=[N,m1[0][0],x[0],x[2],x[3],x[4],x[5],s.tick,s.per,s.va,s.days,useTk?FPH:0,useTk?FPLV:0,pd()].join();
+  const useTk=typeof FPM!=="undefined"&&FPM.size>0,x=m1[N-1],tkKey=C.sym+"|"+s.days+"|"+s.tick+"|"+pd(),sig=[N,m1[0][0],x[0],x[2],x[3],x[4],x[5],s.tick,s.per,s.va,s.days,useTk?FPH:0,useTk?FPLV:0,pd(),TPC.tkKey===tkKey?TPC.tkv:0].join();
   if(TPC.sig===sig)return TPC;
   const g=new Map();for(const b of m1){const d=Math.floor(b[0]/86400);let a=g.get(d);if(!a)g.set(d,a=[]);a.push(b)}
   const all=[...g.keys()].sort((a,b)=>a-b),ds=all.slice(-s.days);TPC.have=all.length;
@@ -64,6 +64,12 @@ function tpoData(){
   let tk=+s.tick>0?+s.tick:0;
   if(!tk){const w=Math.max(mn,rg[rg.length>>1]/70),p=Math.pow(10,Math.floor(Math.log10(w))),m=w/p;tk=(m<=1?1:m<=2?2:m<=5?5:10)*p}
   tk=Math.max(mn,tk,rg[rg.length-1]/2000);
+  /* Cỡ hàng giá tự động (≈ range trung vị / 70) phụ thuộc các ngày đang hiển thị. Trước đây nó đổi mỗi lần nạp thêm ngày cũ hoặc sang ngày mới,
+     làm thang giá của chart nhảy (cảm giác "teleport"). Giờ: chỉ chốt khi đã đủ số ngày (hoặc hết lịch sử), rồi giữ nguyên cho tới khi đổi mã / số ngày / cỡ hàng. */
+  if(!(+s.tick>0)){
+    if(TPC.tkKey===tkKey&&TPC.tkv>0)tk=TPC.tkv;
+    else if(all.length>=s.days+1||m1NoMore){TPC.tkKey=tkKey;TPC.tkv=tk}
+  }
   TPC.days=ds.map(d=>({d,T:tpoDay(d,g.get(d),tk,s.per*60,s.va/100,useTk)}));TPC.u=TPC.days.length?TPC.days[0].T.bp:tk;TPC.sig=sig;return TPC;
 }
 async function tpoLoad(){   // kéo thêm nến M1 cũ (giống fillLeft của chart chính nhưng theo số ngày cần xem)
@@ -97,14 +103,14 @@ function tpoPaint(g,W,H,AX,BH,L,vw,s,K,px,ch){
     if(xr<0||x0>PW)continue;
     const yTop=Y((T.lo+T.n)*T.bp)+0,yBot=Y(T.lo*T.bp),md=Math.abs(T.dl[T.dp])||1;
     g.globalAlpha=.6;g.strokeStyle=K.line;g.lineWidth=1;g.strokeRect(x0,yTop,xr-x0,yBot-yTop);
-    if(e.DW){g.beginPath();g.moveTo(zx,yTop);g.lineTo(zx,yBot);g.stroke()}g.globalAlpha=1;
+    g.globalAlpha=1;
     for(let i=0;i<T.n;i++){
       const y=Y((T.lo+i+.5)*T.bp);if(y<-rh||y>H+rh)continue;
       const inVA=i>=T.vl&&i<=T.vh,top=y-rh/2;
       T.per[i].forEach((p,k)=>{
         const cx=x0+k*cw;g.fillStyle=pal(p,inVA);g.fillRect(cx,top,cw,rh);
         if(cw>=6&&rh>=6){g.strokeStyle="rgba(255,255,255,.55)";g.lineWidth=.6;g.strokeRect(cx+.3,top+.3,cw-.6,rh-.6);g.lineWidth=1}
-        if(s.letters&&cw>=11&&rh>=11){g.font="700 "+Math.min(rh-3,13)+"px "+FN;g.fillStyle="rgba(255,255,255,.92)";g.textAlign="center";g.fillText(LET[p]||"?",cx+cw/2,y+1)}
+        if(s.lt&&cw>=9&&rh>=9){g.font="700 "+Math.max(7,Math.min(rh-3,cw-2,28))+"px "+FN;g.fillStyle="rgba(255,255,255,.95)";g.textAlign="center";g.textBaseline="middle";g.fillText(LET[p%LET.length],cx+cw/2,y+1)}
       });
       if(s.showSp&&T.cnt[i]===1){g.strokeStyle=K.sp;g.lineWidth=1.2;g.strokeRect(x0+.5,top+.5,cw-1,rh-1);g.lineWidth=1}
       if(s.showOC){
@@ -115,9 +121,11 @@ function tpoPaint(g,W,H,AX,BH,L,vw,s,K,px,ch){
       }
       const d=T.dl[i];
       if(e.DW&&d){
-        const bw=Math.max(.5,Math.abs(d)/md*dW/2);g.fillStyle=d>0?K.buy:K.sell;g.globalAlpha=.88;g.fillRect(d>0?zx:zx-bw,top+.5,bw,Math.max(1,rh-1));g.globalAlpha=1;
-        if(rh>=11){const t=(d>0?"+":"-")+tfv(Math.abs(d)),lw=t.length*5.8;g.font="9px "+FN;g.fillStyle=K.mut;
-          if(d>0&&zx+bw+lw+3<xr){g.textAlign="left";g.fillText(t,zx+bw+2,y+1)}else if(d<0&&zx-bw-lw-3>vL){g.textAlign="right";g.fillText(t,zx-bw-2,y+1)}}
+        const bw=Math.max(.5,Math.abs(d)/md*dW);   // cả delta dương lẫn âm đều bắt đầu từ mép phải và kéo sang trái; màu phân biệt dấu
+        g.fillStyle=d>0?K.buy:K.sell;g.globalAlpha=.88;g.fillRect(xr-bw,top+.5,bw,Math.max(1,rh-1));g.globalAlpha=1;
+        if(rh>=11){const t=(d>0?"+":"-")+tfv(Math.abs(d)),lw=g.measureText(t).width;g.font="600 9px "+FN;   // số nằm TRONG cột delta, sát đầu trái của vạch
+          const lw2=g.measureText(t).width;let tx=xr-bw+2;if(tx+lw2>xr-1)tx=xr-lw2-1;   // vạch ngắn: dồn vào trong mép phải cột
+          if(tx>=vL+1){g.textAlign="left";g.lineJoin="round";g.lineWidth=2.5;g.strokeStyle="rgba(0,0,0,.55)";g.strokeText(t,tx,y+1);g.fillStyle="rgba(255,255,255,.96)";g.fillText(t,tx,y+1);g.lineWidth=1}}   // viền tối để đọc được cả khi chữ dài hơn vạch
       }
     }
     if(e.DW){
@@ -163,15 +171,17 @@ const tpoOn=()=>$("v-tpo").classList.contains("on");
 function tpoMsg(t){tpg.clearRect(0,0,TPW,TPH+TBH);tpg.fillStyle=tvar("--mut");tpg.font="14px Space Grotesk,system-ui,sans-serif";tpg.textAlign="left";tpg.textBaseline="middle";tpg.fillText(L10(t),16,40);$("tpoInfo").textContent=""}
 function tpoDraw(){
   if(!tpoOn()||!TPW)return;
-  if(TV.sym!==C.sym){TV.sym=C.sym;TV.follow=true;TV.cp=null;$("tpoLive").classList.add("on")}
+  if(TV.sym!==C.sym){TV.sym=C.sym;TV.follow=true;TV.cp=null;TV.an=null;$("tpoLive").classList.add("on")}
   if(SUB())return tpoMsg("TPO cần nến M1 trở lên. Hãy chọn khung từ M1 ở tab Chart.");
   const s=tpS(),D=tpoData();
   if(!D||!D.days.length)return tpoMsg(loading?"Đang tải nến…":"Chưa có nến M1 (kiểm tra kết nối cTrader ở tab Kết nối).");
-  if(D.have<s.days+1&&!m1NoMore)tpoLoad();
-  const cw=s.cell*s.asp,rh=s.cell,{L,total}=tpoLayout(D.days,s),PW=TPW-TAX,last=L[L.length-1],lp=m1[m1.length-1][4];
+  if(D.have<s.days+1&&!m1NoMore){tpoLoad();if(Date.now()>=fillRetry)return tpoMsg("Đang tải các ngày trước đó…")}   // vẽ khi đã đủ ngày: vẽ bản dở rồi nạp thêm làm cả chart bị xô lệch
+  const cw=s.cell*s.asp,rh=s.cell,{L,total}=tpoLayout(D.days,s),PW=TPW-TAX,last=L[L.length-1],lp=m1[m1.length-1][4];TV.end=last.u+last.w-3;
   if(TV.cp==null)TV.cp=lp;
   if(TV.follow){TV.sx=(last.u+last.w-3)*cw+TMX-PW;TV.cp=lp}
+  else if(TV.an&&TV.an.cw===cw){const e=L.find(x=>x.d===TV.an.d);if(e)TV.sx=e.u*cw+TV.an.off}   // neo theo NGÀY đang ở mép trái màn hình, không theo toạ độ pixel
   TV.sx=Math.max(-PW*.5,Math.min(TV.sx,total*cw-PW*.4));
+  {const e=L.find(x=>(x.u+x.w)*cw>TV.sx);TV.an=e?{d:e.d,off:TV.sx-e.u*cw,cw}:null}
   const px=BA&&BA.sym===C.sym&&BA.bid>0?BA.bid:lp,K=tpoCol();
   const f=tpoPaint(tpg,TPW,TPH,TAX,TBH,L,{cw,rh,sx:TV.sx,cp:TV.cp,u:D.u},s,K,px,TV.ch),T=(f||last).T,dc=pd();
   $("tpoInfo").textContent="O: "+tfm(T.open,dc)+"   H: "+tfm(T.h,dc)+"   L: "+tfm(T.l,dc)+"   C: "+tfm(T.close,dc);
@@ -181,35 +191,47 @@ function tpoSize(){const r=$("tpoCard").getBoundingClientRect(),d=devicePixelRat
 new ResizeObserver(tpoSize).observe($("tpoCard"));
 function tpoShow(){tpoSize();$("tpoSym").textContent=C.sym+" · "+tfName(C.tf);tpoRedraw()}
 const tcl=(x,lo,hi)=>x<lo?lo:x>hi?hi:x;
-function tpoZoom(cx,cy,fx,fy){   // zoom độc lập: fx = ngang (độ rộng ô), fy = dọc (chiều cao ô)
-  const s=tpS(),rh=s.cell,cw=rh*s.asp,u=TPC.u||1,nrh=tcl(rh*fy,4,40),ncw=tcl(cw*fx,3,60);
-  TV.sx=(TV.sx+cx)/cw*ncw-cx;const p=TV.cp+(TPH/2-cy)/rh*u;TV.cp=p-(TPH/2-cy)/nrh*u;
-  TPO_S.cell=nrh;TPO_S.asp=ncw/nrh;tpoRedraw();
+/* Zoom giống chart nến (lightweight-charts):
+   - lăn chuột: mỗi nấc đổi ~TPZ (15%) kích thước ô, tính theo deltaY đã chuẩn hoá (pixel/dòng/trang), điểm dưới con trỏ đứng yên;
+   - chụm 2 ngón: tỉ lệ khoảng cách giữa 2 ngón, điểm giữa 2 ngón đứng yên và kéo theo được (vừa zoom vừa cuộn);
+   - lăn/kéo trên trục giá = chỉ zoom dọc, trục giờ = chỉ zoom ngang (như trục của chart nến).
+   Zoom xong mà không còn ở mép phải (nến mới nhất) thì thôi tự bám nến mới, giống chart nến khi đã cuộn ra xa. */
+const TPZ=.15,TRH=[4,80],TCW=[3,80];
+function tpoZoom(cx,cy,fx,fy,dx,dy){   // fx/fy: hệ số ngang/dọc; (dx,dy): độ dời điểm neo (pinch kèm cuộn)
+  const s=tpS(),rh=s.cell,cw=rh*s.asp,u=TPC.u||1,nrh=tcl(rh*fy,TRH[0],TRH[1]),ncw=tcl(cw*fx,TCW[0],TCW[1]);
+  if(nrh===rh&&ncw===cw&&!dx&&!dy)return;
+  const p=TV.cp+(TPH/2-cy)/rh*u;                                   // giá đang nằm dưới điểm neo
+  TV.sx=(TV.sx+cx)/cw*ncw-cx-(dx||0);TV.cp=p-(TPH/2-cy-(dy||0))/nrh*u;
+  TPO_S.cell=nrh;TPO_S.asp=ncw/nrh;TV.an=null;
+  if(TV.follow&&(dx||dy||Math.abs(TV.sx-((TV.end||0)*ncw+TMX-(TPW-TAX)))>20)){TV.follow=false;$("tpoLive").classList.remove("on")}
+  tpoRedraw();
 }
-const tptr=new Map(),tspan=()=>{const a=[...tptr.values()];return[Math.abs(a[0][0]-a[1][0]),Math.abs(a[0][1]-a[1][1])]};
+const tptr=new Map(),tgeo=()=>{const a=[...tptr.values()];return{d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),x:(a[0][0]+a[1][0])/2,y:(a[0][1]+a[1][1])/2}};
 tcv.onpointerdown=e=>{
   tcv.setPointerCapture(e.pointerId);tptr.set(e.pointerId,[e.offsetX,e.offsetY]);
   TV.mode=tptr.size>1?"pinch":e.offsetX>TPW-TAX?"y":e.offsetY>TPH?"x":"pan";   // chạm trục giá = zoom dọc, trục giờ = zoom ngang
+  if(TV.mode==="pinch")TV.pg=tgeo();
   TV.ch=TV.mode==="pan"?[e.offsetX,e.offsetY]:null;tpoRedraw();
 };
 tcv.onpointermove=e=>{
   const o=tptr.get(e.pointerId);
   if(!o){if(e.pointerType==="mouse"){TV.ch=[e.offsetX,e.offsetY];tpoRedraw()}return}
   const n=[e.offsetX,e.offsetY];
-  if(tptr.size>=2){   // chụm 2 ngón: tách theo trục — ngón xa nhau theo chiều ngang thì zoom ngang, chiều dọc thì zoom dọc
-    const[ox,oy]=tspan();tptr.set(e.pointerId,n);const[nx,ny]=tspan(),a=[...tptr.values()];TV.ch=null;
-    let fx=ox>40?nx/ox:1,fy=oy>40?ny/oy:1;if(ox<=40&&oy<=40)fx=fy=Math.hypot(nx,ny)/(Math.hypot(ox,oy)||1);
-    tpoZoom((a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2,fx,fy);return;
+  if(tptr.size>=2){   // chụm 2 ngón: zoom đều theo tỉ lệ khoảng cách, đồng thời cuộn theo điểm giữa
+    tptr.set(e.pointerId,n);const g=tgeo(),p=TV.pg||g;TV.ch=null;TV.pg=g;
+    if(p.d>8)tpoZoom(g.x,g.y,g.d/p.d,g.d/p.d,g.x-p.x,g.y-p.y);return;
   }
   tptr.set(e.pointerId,n);const dx=n[0]-o[0],dy=n[1]-o[1];
   if(TV.mode==="y")tpoZoom(0,TPH/2,1,Math.exp(-dy/200));
   else if(TV.mode==="x")tpoZoom((TPW-TAX)/2,0,Math.exp(dx/300),1);
-  else{TV.ch=n;if(dx){TV.follow=false;$("tpoLive").classList.remove("on");TV.sx-=dx}TV.cp+=dy/tpS().cell*(TPC.u||1);tpoRedraw()}
+  else{TV.ch=n;if(dx){TV.follow=false;$("tpoLive").classList.remove("on");TV.sx-=dx}TV.an=null;TV.cp+=dy/tpS().cell*(TPC.u||1);tpoRedraw()}
 };
-tcv.onpointerup=tcv.onpointercancel=e=>{tptr.delete(e.pointerId);saveTP();if(e.pointerType!=="mouse"||tptr.size){TV.ch=null;tpoRedraw()}if(tptr.size===1)TV.mode="none"};
+tcv.onpointerup=tcv.onpointercancel=e=>{tptr.delete(e.pointerId);saveTP();if(e.pointerType!=="mouse"||tptr.size){TV.ch=null;tpoRedraw()}if(tptr.size===1){TV.mode="none";TV.pg=null}};
 tcv.onpointerleave=()=>{TV.ch=null;tpoRedraw()};
-tcv.onwheel=e=>{   // lăn trên trục giá = zoom dọc, trên trục giờ = zoom ngang, còn lại zoom cả hai
-  e.preventDefault();const f=Math.exp(-e.deltaY*.0015),ox=e.offsetX>TPW-TAX,oy=e.offsetY>TPH;
+tcv.onwheel=e=>{   // chuẩn hoá deltaY như lightweight-charts rồi đổi ~TPZ mỗi nấc, neo tại con trỏ
+  e.preventDefault();
+  let d=e.deltaY*(e.deltaMode===1?33:e.deltaMode===2?TPH:1);if(e.ctrlKey)d*=4;   // ctrl + lăn / chụm trackpad: nhạy hơn vì sự kiện nhỏ
+  const f=1-tcl(d/100,-1,1)*TPZ,ox=e.offsetX>TPW-TAX,oy=e.offsetY>TPH;
   tpoZoom(e.offsetX,e.offsetY,ox?1:f,oy?1:f);clearTimeout(tcv._w);tcv._w=setTimeout(saveTP,400);
 };
 const tpoLive=()=>{TV.follow=true;TV.cp=null;$("tpoLive").classList.add("on");tpoRedraw()};
@@ -236,7 +258,7 @@ function buildTPS(){
   const chk=(l,k)=>`<div class="f"><label for="tp_${k}">${l}</label><input type="checkbox" id="tp_${k}" data-t="${k}"${s[k]?" checked":""}></div>`;
   const col=(l,k,v)=>`<div class="f"><label for="tp_${k}">${l}</label><input type="color" id="tp_${k}" data-c="${k}" value="${v}"></div>`;
   $("tpsBody").innerHTML=`<div class="grid"><div class="card"><h2>Ô TPO</h2>`+
-   num("Cỡ ô (px)","cell",4,40,1,"Cũng chỉnh được bằng zoom trên chart")+num("Tỉ lệ ngang / dọc","asp",.2,4,.05,"1 = ô vuông")+chk("Hiện chữ cái trong ô","letters")+chk("Open / Close","showOC")+chk("Delta Profile (bên phải)","showDelta")+chk("Single Print","showSp")+chk("Kéo dài POC / VA / Single Print","showExt")+chk("Nhãn H / L / VAH / VAL / POC","showLbl")+
+   num("Cỡ ô (px)","cell",4,80,1,"Cũng chỉnh được bằng zoom trên chart")+num("Tỉ lệ ngang / dọc","asp",.2,4,.05,"1 = ô vuông")+chk("Hiện chữ cái trong ô","lt")+chk("Open / Close","showOC")+chk("Delta Profile (bên phải)","showDelta")+chk("Single Print","showSp")+chk("Kéo dài POC / VA / Single Print","showExt")+chk("Nhãn H / L / VAH / VAL / POC","showLbl")+
    `<h2 style="margin-top:16px">Dữ liệu</h2>`+
    `<div class="f"><label for="tp_per">Chu kỳ mỗi ô (phút)</label><select id="tp_per" data-n="per">${[15,30,60].map(v=>`<option value="${v}"${s.per===v?" selected":""}>${v}</option>`).join("")}</select></div>`+
    num("Số ngày hiển thị","days",1,15,1,"Tự tải thêm nến M1 cũ nếu thiếu")+num("Kích thước hàng giá","tick",0,1000,"any","0 = tự động (≈ 70 hàng cho 1 ngày)")+num("Value Area (%)","va",50,95,1)+
