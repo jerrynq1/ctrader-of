@@ -188,6 +188,7 @@ function ctSpot(p){
     }
   }
   if(CT.bid>0&&CT.ask>0)ctFpTick(ts,CT.bid,CT.ask);
+  if(p.bid!=null&&CT.bid>0&&typeof sbLive==="function")sbLive(ts,CT.bid);   // khung giây dựng từ tick bid (chart.js)
 }
 
 /* ---------- nến M1 lịch sử ---------- */

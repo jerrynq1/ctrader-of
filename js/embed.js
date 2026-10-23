@@ -11,6 +11,7 @@ addEventListener("storage",e=>{
     else if(e.key==="tp_cs"){CSx=JSON.parse(v||"{}")||{};applyCand();if(typeof baUpdate==="function")baUpdate();if(agg.length)rebuild(false)}
     else if((e.key==="gx-lang"||e.key==="tp_lang")&&v&&window.I18N&&I18N.get()!==v)I18N.set(v);
     else if(e.key==="tp_ct"){ctClose();loadM1()}
+    else if(e.key==="tp_ctf"){loadCtf();buildTfs()}
   }catch(x){}
 });
 if(!EMB)return;

@@ -120,7 +120,7 @@ function mkPane(a){
   const c=COL(),g=eff().grid?c.gr:"rgba(0,0,0,0)",box=el.querySelector(".pc");
   const ch=LightweightCharts.createChart(box,{layout:{background:{color:"transparent"},textColor:c.tx,fontFamily:"Space Grotesk"},
     rightPriceScale:{borderColor:c.bd,scaleMargins:{top:.14,bottom:.14}},
-    timeScale:{timeVisible:true,secondsVisible:false,borderColor:c.bd,tickMarkFormatter:t=>tickFmt(t)},
+    timeScale:{timeVisible:true,secondsVisible:SUB(),borderColor:c.bd,tickMarkFormatter:t=>tickFmt(t)},
     localization:{timeFormatter:t=>crossFmt(t)},grid:{vertLines:{color:g},horzLines:{color:g}},crosshair:{mode:0},autoSize:true});
   PN[a.id]={el,ch,lg:el.querySelector(".pl"),series:[],raw:[]};
   bindChart(ch,box);
@@ -261,7 +261,7 @@ function openSet(id){
   const a=ACT.find(x=>x.id===id);if(!a||document.querySelector(".mdl"))return;
   const d=IND[a.key],bak=JSON.parse(JSON.stringify(a)),back=document.activeElement;let tab="in";const hpo=new Set();
   const o=document.createElement("div");o.className="mdl";o.setAttribute("role","dialog");o.setAttribute("aria-modal","true");o.setAttribute("aria-labelledby","dlgT");
-  const vis=()=>a.vis||TFS.map(t=>t[1]);
+  const vis=()=>a.vis||allTfs().map(t=>t[1]);
   const draw=()=>{
     const sc0=(o.querySelector(".bd")||{}).scrollTop||0;const T=[["in","Thông số"],["st","Kiểu dáng"],["vi","Hiển thị"]];let b="";
     if(tab==="in"){let g=null;
@@ -273,7 +273,7 @@ function openSet(id){
       if(d.L.length&&!["vd","cvd","fpr","bt","dst"].includes(a.key))b+=`<div class="f"><label for="dw">Độ dày đường</label><select id="dw" data-w="1">${[1,2,3,4].map(n=>`<option value="${n}"${(a.w||2)===n?" selected":""}>${n}px</option>`).join("")}</select></div>`;
       if(d.c.some(x=>x[0]==="@"))b+=`<p class="msg">Một số màu mặc định lấy theo màu nến tăng/giảm (mục Chart Setting). Chọn màu khác để ghi đè; bấm Mặc định để quay lại.</p>`;
       if(a.key==="macd")b+=`<p class="msg">Histogram luôn lấy theo màu nến tăng/giảm (đậm khi động lượng mạnh lên, nhạt khi yếu đi).</p>`}
-    else b=`<p class="msg">Chỉ hiện indicator trên các khung được chọn.</p><div class="bar">${TFS.map(([n,s])=>`<label class="chk"><input type="checkbox" data-v="${s}"${vis().includes(s)?" checked":""}>${n}</label>`).join("")}</div>`;
+    else b=`<p class="msg">Chỉ hiện indicator trên các khung được chọn.</p><div class="bar">${allTfs().map(([n,s])=>`<label class="chk"><input type="checkbox" data-v="${s}"${vis().includes(s)?" checked":""}>${n}</label>`).join("")}</div>`;
     o.innerHTML=`<div class="box"><header><h3 id="dlgT">${d.n}</h3><button class="ib" type="button" data-act="cancel" aria-label="Đóng" style="width:36px;height:36px">✕</button></header><div class="tabs">${T.map(([k,n])=>`<button type="button" data-tab="${k}" class="${k===tab?"on":""}">${n}</button>`).join("")}</div><div class="bd">${b}</div><footer><button class="btn ghost sm" type="button" data-act="def">Mặc định</button><span style="flex:1"></span><button class="btn ghost sm" type="button" data-act="cancel">Hủy</button><button class="btn sm" type="button" data-act="ok">OK</button></footer></div>`;
     const bd0=o.querySelector(".bd");if(bd0)bd0.scrollTop=sc0;
   };
@@ -297,7 +297,7 @@ function openSet(id){
     if(t.dataset.p){setP(a,d,t.dataset.p,t);saveInd();renderInd();
       if(t.tagName==="SELECT"||t.type==="checkbox"){draw();const n=o.querySelector(`[data-p="${t.dataset.p}"]`);if(n)n.focus()}}   // vẽ lại để ẩn/hiện các ô phụ thuộc
     else if(t.dataset.w){a.w=+t.value;saveInd();renderInd()}
-    else if(t.dataset.v){const l=[...o.querySelectorAll("[data-v]")].filter(x=>x.checked).map(x=>+x.dataset.v);if(!l.length){t.checked=true;return}if(l.length===TFS.length)delete a.vis;else a.vis=l;saveInd();renderInd()}
+    else if(t.dataset.v){const l=[...o.querySelectorAll("[data-v]")].filter(x=>x.checked).map(x=>+x.dataset.v);if(!l.length){t.checked=true;return}if(l.length===allTfs().length)delete a.vis;else a.vis=l;saveInd();renderInd()}
   };
   o.oninput=e=>{const t=e.target,j=t.dataset.c;if(j===undefined)return;a.c[+j]=t.value;saveInd();if(d.rc)rIndSoon();else applyColor(a,+j);legend()};
   draw();document.body.append(o);o.querySelector("[data-act=ok]").focus();

@@ -13,7 +13,24 @@ function hit(d,x,y,soft){const P=geo(d);if(!P)return false;const[a,b]=P,inB=(p,q
   if(d.k==="vp"&&soft&&(!d.per||d.per==="custom")&&inB(a,b,4))return true;   // Volume Profile: bấm bất kỳ đâu trong khung (ưu tiên thấp hơn các hình khác nằm đè lên)
   const q=d._b;return!!q&&x>=q[0]-4&&x<=q[0]+q[2]+4&&y>=q[1]-4&&y<=q[1]+q[3]+4}
 /* ---- thao tác ---- */
-const pickIdx=(x,y)=>{for(let i=D.length-1;i>=0;i--)if(vis(D[i])&&hit(D[i],x,y))return i;for(let i=D.length-1;i>=0;i--)if(vis(D[i])&&D[i].k==="vp"&&hit(D[i],x,y,true))return i;return -1};
+const pickIdx=(x,y,ns)=>{for(let i=D.length-1;i>=0;i--)if(vis(D[i])&&hit(D[i],x,y))return i;if(ns)return -1;for(let i=D.length-1;i>=0;i--)if(vis(D[i])&&D[i].k==="vp"&&hit(D[i],x,y,true))return i;return -1};
+/* ---- CẢM ỨNG: chạm chủ động vs kéo/zoom chart ----
+   Trước đây ngón tay vừa chạm xuống hình vẽ là hình được chọn và bị kéo đi luôn, nên kéo/zoom chart mà lỡ chạm vào hình (nhất là Volume Profile) là hình dịch chuyển.
+   Giờ (chỉ cảm ứng, chuột giữ nguyên): chạm xuống KHÔNG làm gì, chart vẫn kéo/zoom bình thường. Hình chỉ được chọn khi CHẠM NHẸ (nhấc tay nhanh, không di chuyển, không có ngón thứ 2).
+   Muốn dời cả hình: chọn hình trước, rồi GIỮ yên ngón tay trên hình ~0,3 giây (máy rung nhẹ) rồi mới kéo. Kéo nút tròn (điểm neo) của hình đang chọn vẫn kéo được ngay.
+   Chạm nhẹ vào chỗ trống mới bỏ chọn (kéo/zoom chart không làm mất chọn). Volume Profile trên cảm ứng chỉ chọn khi chạm đúng vào phần hiển thị, không chọn cả khung. */
+let tp=null,lpk=false;const TAPMV=10,LPMS=300,TAPMS=450;
+const cancelTp=()=>{if(tp&&tp.T)clearTimeout(tp.T);tp=null};
+function tpStart(e,x,y){
+  cancelTp();lpk=false;
+  const i=pickIdx(x,y,true);
+  tp={id:e.pointerId,i,x,y,t:Date.now(),lp:false,T:0};
+  if(i>=0&&D[i]===sel&&!sel.lk)tp.T=setTimeout(()=>{
+    if(!tp||drag)return;tp.T=0;tp.lp=true;claim=true;lpk=true;      // giữ đủ lâu: vào chế độ dời hình, chặn chart kéo theo
+    drag={m:"body",o:sel.pts.map(q=>({...q})),l0:ts.coordinateToLogical(tp.x),p0:cs.coordinateToPrice(tp.y),px:tp.x,py:tp.y};
+    try{navigator.vibrate&&navigator.vibrate(18)}catch(_){}
+    dirty=true},LPMS);
+}
 const TOFF=46,TWO=["trend","ray","ruler","chan","fib","rect","ell","vp"];const placing=()=>TWO.includes(tool)||(drag&&drag.m==="new");
 const rel=e=>{const r=cv.getBoundingClientRect();let y=e.clientY-r.top;if(e.pointerType==="touch"&&placing())y=Math.max(0,y-TOFF);return[e.clientX-r.left,y]};
 const done=()=>{if(dwCur&&dwCur.k==="chan"&&dwCur.off==null){const y0=cs.priceToCoordinate(dwCur.pts[0].p);dwCur.off=cs.coordinateToPrice(y0-60)-dwCur.pts[0].p}if(dwCur&&dwCur.pts[0].t===dwCur.pts[1].t&&dwCur.pts[0].p===dwCur.pts[1].p)D=D.filter(z=>z!==dwCur);else sel=dwCur;dwCur=null;if(!keep)tool="cur";save();ui();dirty=true};
@@ -26,7 +43,7 @@ let SD={};try{SD=JSON.parse(localStorage.getItem(SDK))||{}}catch(e){SD={}}
 const TDEF={ray:{ex:"r"},ruler:{st:"v",as:true,c:"#8b7cff",ls:"d"}};
 function remStyle(d){if(!d||!d.k||(!d.tk&&d.k==="trend"))return;const s={};Object.keys(d).forEach(q=>{if(q[0]!=="_"&&!SDX.includes(q))s[q]=d[q]});SD[tkOf(d)]=clone(s);try{localStorage.setItem(SDK,JSON.stringify(SD))}catch(e){}}
 const mk=(k,p,tk)=>{tk=tk||k;const d={id:Date.now()+""+Math.random().toString(36).slice(2,6),k,tk,pts:[p,{...p}]};Object.assign(d,clone(TDEF[tk]||{}),clone(SD[tk]||{}));return d};
-$("chart").addEventListener("pointerdown",e=>{tl=e.pointerType==="touch"?2.4:1;tch=tl>1;if(e.isPrimary)claim=false;kc=e.ctrlKey||e.metaKey;ks=e.shiftKey;if(hid||e.button||edit||(e.target&&e.target.id==="dwi"))return;const[x,y]=rel(e),[w,h]=plot();if(x>w||y>h||e.clientY-cv.getBoundingClientRect().top>h)return;
+$("chart").addEventListener("pointerdown",e=>{tl=e.pointerType==="touch"?2.4:1;tch=tl>1;if(e.isPrimary)claim=false;kc=e.ctrlKey||e.metaKey;ks=e.shiftKey;if(hid||e.button||edit||(e.target&&e.target.id==="dwi"))return;if(e.pointerType==="touch"&&!e.isPrimary&&tool==="cur"){cancelTp();return}const[x,y]=rel(e),[w,h]=plot();if(x>w||y>h||e.clientY-cv.getBoundingClientRect().top>h)return;
   const stop=()=>{e.stopPropagation();e.preventDefault();if(e.pointerType==="touch")claim=true};
   if(tool!=="cur"){stop();const p=pt(x,y);if(!p)return;
     if(tool==="long"||tool==="short"){const L=tool==="long",l1=ts.coordinateToLogical(x+170),d=mk(tool,p),t1=l2s(l1==null?s2l(p.t)+10:l1);
@@ -35,18 +52,20 @@ $("chart").addEventListener("pointerdown",e=>{tl=e.pointerType==="touch"?2.4:1;t
     if(!dwCur){dwCur=mk(tool==="ray"||tool==="ruler"?"trend":tool,p,tool);D.push(dwCur);drag={m:"new",x,y}}else{dwCur.pts[1]=cp(x,y,dwCur,1)||p;done()}dirty=true;return}
   if(sel&&!sel.lk){const h=hnd(sel).find(q=>Math.hypot(q[0]-x,q[1]-y)<9*tl);if(h){stop();
     if((sel.k==="long"||sel.k==="short")&&h[2]===0)drag={m:"body",o:sel.pts.map(q=>({...q})),l0:ts.coordinateToLogical(x),p0:cs.coordinateToPrice(y),px:x,py:y};else drag={m:"h",i:h[2],gx:e.pointerType==="touch"?h[0]-x:0,gy:e.pointerType==="touch"?h[1]-y:0};return}}
+  if(e.pointerType==="touch"){tpStart(e,x,y);return}   // cảm ứng: chưa chọn gì, đợi xem là chạm nhẹ hay kéo/zoom
   for(let i=pickIdx(x,y);i>=0;i=-1){if(D[i].lk){sel=D[i];ui();dirty=true;return}stop();sel=D[i];drag={m:"body",o:sel.pts.map(q=>({...q})),l0:ts.coordinateToLogical(x),p0:cs.coordinateToPrice(y),px:x,py:y};ui();dirty=true;return}
   if(sel){sel=null;ui();dirty=true}},true);
-window.addEventListener("pointermove",e=>{const[x,y]=rel(e);tch=e.pointerType==="touch";kc=e.ctrlKey||e.metaKey;ks=e.shiftKey;lx=x;ly=y;upd();
+window.addEventListener("pointermove",e=>{const[x,y]=rel(e);if(tp&&e.pointerId===tp.id&&!tp.lp&&Math.hypot(x-tp.x,y-tp.y)>TAPMV)cancelTp();tch=e.pointerType==="touch";kc=e.ctrlKey||e.metaKey;ks=e.shiftKey;lx=x;ly=y;upd();
   if(dwCur&&tool==="cur"===false&&dwCur.pts){const p=cp(x,y,dwCur,1);if(p){dwCur.pts[1]=p;dirty=true}}
   if(!drag)return;
   if(drag.m==="new"){const p=cp(x,y,dwCur,1);if(p){dwCur.pts[1]=p;dirty=true}}
   else if(drag.m==="body"){const l=ts.coordinateToLogical(x),p=cs.coordinateToPrice(y);if(l==null||p==null)return;let dl=l-drag.l0,dp=p-drag.p0;if(ks){if(Math.abs(x-drag.px)>=Math.abs(y-drag.py))dp=0;else dl=0}sel.pts=drag.o.map(q=>({t:l2s(s2l(q.t)+dl),p:q.p+dp}));dirty=true}
   else if(drag.m==="h"){const gy=drag.gy||0,s=sel,p=cp(x+(drag.gx||0),y+gy,s,drag.i);if(!p)return;
     if(s.k==="long"||s.k==="short"){if(drag.i===1){s.pts[1]=p;s.pts[2].t=p.t}else if(drag.i===2){s.pts[2].p=p.p;s.pts[2].t=p.t;s.pts[1].t=p.t}else{s.pts[1].t=s.pts[2].t=p.t}}else if((s.k==="rect"||s.k==="ell")&&drag.i>1)rdrag(s,drag,p);else if(s.k==="chan"&&drag.i===2)s.off=cs.coordinateToPrice(y+gy)-(s.pts[0].p+s.pts[1].p)/2;else s.pts[drag.i]=p;dirty=true}});
-window.addEventListener("pointerup",e=>{if(pendEdit){const d=pendEdit;pendEdit=null;openEdit(d)}if(e.pointerType==="touch")setTimeout(upd,0);if(!drag)return;const m=drag.m;if(m==="new"){const[x,y]=rel(e);if(Math.hypot(x-drag.x,y-drag.y)>(tl>1?14:6)){drag=null;done();return}}else save();drag=null});
+window.addEventListener("pointercancel",e=>{if(tp&&e.pointerId===tp.id&&!tp.lp)cancelTp()});
+window.addEventListener("pointerup",e=>{if(tp&&e.pointerId===tp.id){const t=tp;cancelTp();if(!t.lp&&Date.now()-t.t<TAPMS){if(t.i>=0){sel=D[t.i];ui();dirty=true}else if(sel){sel=null;ui();dirty=true}}}if(pendEdit){const d=pendEdit;pendEdit=null;openEdit(d)}if(e.pointerType==="touch")setTimeout(upd,0);if(!drag)return;const m=drag.m;if(m==="new"){const[x,y]=rel(e);if(Math.hypot(x-drag.x,y-drag.y)>(tl>1?14:6)){drag=null;done();return}}else save();drag=null});
 /* chạm: khi module vẽ đã nhận cử chỉ (đang vẽ / kéo hình) thì chặn sự kiện chạm gốc, để chart không bị kéo theo ngón tay */
-(()=>{const eat=e=>{if(!claim)return;e.stopImmediatePropagation();if(e.cancelable)e.preventDefault();if((e.type==="touchend"||e.type==="touchcancel")&&e.touches.length===0)claim=false};["touchstart","touchmove","touchend","touchcancel"].forEach(n=>$("chart").addEventListener(n,eat,{capture:true,passive:false}))})();
+(()=>{const eat=e=>{if(lpk&&(e.type==="touchend"||e.type==="touchcancel")){if(e.touches.length===0){claim=false;lpk=false}return}if(!claim)return;e.stopImmediatePropagation();if(e.cancelable)e.preventDefault();if((e.type==="touchend"||e.type==="touchcancel")&&e.touches.length===0)claim=false};["touchstart","touchmove","touchend","touchcancel"].forEach(n=>$("chart").addEventListener(n,eat,{capture:true,passive:false}))})();
 function rdrag(s,dr,p){const i=dr.i,P=geo(s);if(!P)return;const[a,b]=P;
   if(i===2){s.pts[1].t=p.t;s.pts[0].p=p.p;return}if(i===3){s.pts[0].t=p.t;s.pts[1].p=p.p;return}
   if(dr.ix===undefined)dr.ix=i<6?(i===4?(a[1]<=b[1]?0:1):(a[1]<=b[1]?1:0)):(i===6?(a[0]<=b[0]?0:1):(a[0]<=b[0]?1:0));
@@ -119,7 +138,7 @@ function openDlg(d){
     if(k==="vp"&&["g","s"].includes(tab))return vpTab(tab,d,{R,CX,CB,SE,NU,OP});
     if(tab==="i")return R("Vốn tài khoản",NU("ac",1000))+R("Rủi ro (%)",NU("rk",1))+R("Khối lượng (để trống = tự tính)",`<input type="number" step="any" min="0" data-f="qt" value="${d.qt||""}" placeholder="${posI(d).qty}">`)+R("Giá vào",PI(0,"p"))+R("Mức chốt lời",PI(1,"p"))+R("Mức cắt lỗ",PI(2,"p"));
     if(tab==="c")return`<div class="dr"><span class="l"></span><span class="h">Giá</span><span class="h">Nến</span></div>`+d.pts.map((q,i)=>`<div class="dr"><span class="l">#${i+1}</span>${PI(i,"p")}${PI(i,"b")}</div>`).join("");
-    if(tab==="v"){const v=d.vis||TFS.map(t=>t[1]);return`<p class="msg">Chỉ hiện hình vẽ trên các khung được chọn.</p><div class="bar">${TFS.map(([n,s])=>`<label class="chk"><input type="checkbox" data-v="${s}"${v.includes(s)?" checked":""}>${n}</label>`).join("")}</div>`}
+    if(tab==="v"){const v=d.vis||allTfs().map(t=>t[1]);return`<p class="msg">Chỉ hiện hình vẽ trên các khung được chọn.</p><div class="bar">${allTfs().map(([n,s])=>`<label class="chk"><input type="checkbox" data-v="${s}"${v.includes(s)?" checked":""}>${n}</label>`).join("")}</div>`}
     if(tab==="t")return R("Màu chữ",CB("tc",col(d))+SE("fs",FS([12,14,18,24,32]),14))+CX("b","Đậm")+CX("i","Nghiêng")+TXT+R("Căn dọc",SE("va",VA,k==="trend"?"t":"m"))+R("Căn ngang",SE("ha",HA,k==="trend"?"r":"c"));
     if(k==="trend")return R("Đường",CB("c",col(d))+SE("w",WS,2)+SE("ls",LS,"s"))+R("Đầu A",SE("s1",[["n","Thường"],["a","Mũi tên"]],"n"))+R("Đầu B",SE("e1",[["n","Thường"],["a","Mũi tên"]],"n"))+R("Kéo dài",SE("ex",EXT,"n"))+CX("mp","Điểm giữa")+CX("pl","Nhãn giá")+
       `<h4>Thông tin</h4>`+R("Thống kê",SE("st",[["h","Ẩn"],["v","Giá trị"]],"h"))+R("Vị trí thống kê",SE("sp",HA,"r"))+CX("as","Luôn hiện thống kê");
@@ -138,7 +157,7 @@ function openDlg(d){
     if(t.dataset.tab){tab=t.dataset.tab;closePal();ren()}else if(t.dataset.x)close(t.dataset.x==="o");
     else openPal(t,getF(d,t.dataset.fc)||"#ffffff",c=>{setF(d,t.dataset.fc,c);save();dirty=true;ren()})};
   o.addEventListener("input",e=>{const t=e.target;
-    if(t.dataset.v){const l=[...o.querySelectorAll("[data-v]")].filter(x=>x.checked).map(x=>+x.dataset.v);if(!l.length){t.checked=true;return}if(l.length===TFS.length)delete d.vis;else d.vis=l}
+    if(t.dataset.v){const l=[...o.querySelectorAll("[data-v]")].filter(x=>x.checked).map(x=>+x.dataset.v);if(!l.length){t.checked=true;return}if(l.length===allTfs().length)delete d.vis;else d.vis=l}
     else if(t.dataset.pi!==undefined){const i=+t.dataset.pi,v=+t.value;if(t.value===""||!isFinite(v))return;
       if(t.dataset.pk==="p")d.pts[i].p=v;else{const s=l2s(v);d.pts[i].t=s;if(pos&&i>0){d.pts[1].t=s;d.pts[2].t=s}}}
     else if(t.dataset.f){let v=t.type==="checkbox"?t.checked:t.value;
@@ -154,5 +173,5 @@ document.addEventListener("keydown",e=>{if(document.querySelector(".mdl")||/INPU
   if(m&&k==="z"){e.preventDefault();e.shiftKey?redo():undo()}else if(m&&k==="y"){e.preventDefault();redo()}else if(m&&k==="c"&&sel)clip=JSON.stringify(sel,rp);else if(m&&k==="v"&&clip){e.preventDefault();paste(clip)}else if(m&&k==="d"&&sel){e.preventDefault();dup()}});
 /* chart không có sự kiện đổi thang giá, nên kiểm tra mỗi khung hình và chỉ vẽ lại khi có thay đổi */
 (function tick(){requestAnimationFrame(tick);if(C.sym!==dsym)loadD();const r=$("chart").getBoundingClientRect(),a=ts.getVisibleLogicalRange();
-  const s=[r.width,r.height,a&&a.from,a&&a.to,cs.priceToCoordinate(0),cs.priceToCoordinate(1000),n(),P.theme,C.tf,m1.length,m1.length?m1[m1.length-1][5]:0,m1.length?m1[m1.length-1][4]:0,FPV,ACT.length,JSON.stringify([fpOn(),btOn(),stOn()].map(x=>x||0))].join();if(s!==sig||dirty){sig=s;dirty=false;try{render()}catch(e){chErr("render",e);setTimeout(()=>{dirty=true},500)}}})();
+  const s=[r.width,r.height,a&&a.from,a&&a.to,cs.priceToCoordinate(0),cs.priceToCoordinate(1000),n(),P.theme,C.tf,baseArr().length,baseSig(),FPV,ACT.length,JSON.stringify([fpOn(),btOn(),stOn()].map(x=>x||0))].join();if(s!==sig||dirty){sig=s;dirty=false;try{render()}catch(e){chErr("render",e);setTimeout(()=>{dirty=true},500)}}})();
 ui();

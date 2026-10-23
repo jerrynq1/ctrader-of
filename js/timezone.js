@@ -36,8 +36,8 @@ const u2s=u=>u+tzOff("America/New_York",u*1000)+25200;                      // U
 function disp(st){if(TZ==="srv")return st;const u=toUtcMs(st);return Math.round(u/1000+tzOff(TZ,u))}
 const lp=t=>parts("UTC",t*1000);
 const lbl=s=>"UTC"+(s<0?"-":"+")+Math.floor(Math.abs(s)/3600)+(Math.abs(s)%3600?":"+p2(Math.round(Math.abs(s)%3600/60)):"");
-function tickFmt(t){if(typeof t!=="number")return null;const o=lp(t);if(C.tf<86400&&(o.hour||o.minute))return p2(o.hour)+":"+p2(o.minute);if(o.day===1)return o.month===1?String(o.year):"Th"+o.month;return String(o.day)}
-function crossFmt(t){if(typeof t!=="number")return "";const o=lp(t);return p2(o.day)+"/"+p2(o.month)+"/"+String(o.year).slice(2)+(C.tf<86400?"  "+p2(o.hour)+":"+p2(o.minute):"")}
+function tickFmt(t){if(typeof t!=="number")return null;const o=lp(t);if(C.tf<60&&o.second)return p2(o.hour)+":"+p2(o.minute)+":"+p2(o.second);if(C.tf<86400&&(o.hour||o.minute))return p2(o.hour)+":"+p2(o.minute);if(o.day===1)return o.month===1?String(o.year):"Th"+o.month;return String(o.day)}
+function crossFmt(t){if(typeof t!=="number")return "";const o=lp(t);return p2(o.day)+"/"+p2(o.month)+"/"+String(o.year).slice(2)+(C.tf<86400?"  "+p2(o.hour)+":"+p2(o.minute)+(C.tf<60?":"+p2(o.second):""):"")}
 function applyTz(){allCh().forEach(x=>x.applyOptions({localization:{timeFormatter:t=>crossFmt(t)},timeScale:{tickMarkFormatter:t=>tickFmt(t)}}))}
 function clk(){
   const now=Date.now(),sv_=TZ==="srv",o=sv_?parts("UTC",now+srvCur()*1000):parts(TZ,now);

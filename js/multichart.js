@@ -19,7 +19,6 @@ const I={
   x:'<path d="M5 5l10 10M15 5L5 15"/>',plus:'<path d="M10 4v12M4 10h12"/>'};
 const ic=k=>`<svg viewBox="0 0 20 20" aria-hidden="true">${I[k]}</svg>`;
 window.MC={list:()=>S.l.map(x=>{const i=info[x.id]||{};return{id:x.id,sym:i.sym||ld0("tp_sym_"+x.id,""),tf:i.tf?tfName(+i.tf):tfName(+ld0("tp_tf_"+x.id,0))}})};
-const tfName=s=>(TFS.find(t=>t[1]===s)||["?"])[0];
 const defH=()=>narrow()?Math.max(420,Math.min(680,Math.round(innerHeight*.8))):560;
 const uid=()=>"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 
@@ -68,7 +67,7 @@ function layout(){
 function add(){
   if(S.l.length>=maxN())return;
   const prev=S.l.length?info[S.l[S.l.length-1].id]:null;
-  const tf0=prev?+prev.tf:C.tf,i=TFS.findIndex(t=>t[1]===tf0),tf=TFS[Math.min(i+1,TFS.length-1)][1];   // mặc định: cùng mã, khung giờ lớn hơn 1 bậc (xem đa khung)
+  const tf0=prev?+prev.tf:C.tf,L=allTfs().map(t=>t[1]),tf=L.find(s=>s>tf0)||L[L.length-1];   // mặc định: cùng mã, khung giờ lớn hơn 1 bậc (xem đa khung)
   const it={id:uid(),h:defH()};S.l.push(it);save();
   const el=mk(it,{sym:C.sym,tf});layout();
   requestAnimationFrame(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}));

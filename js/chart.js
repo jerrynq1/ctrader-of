@@ -1,5 +1,7 @@
 /* ================= CHART ================= */
-let m1=[],agg=[],loading=false,busy=false,gen=0;
+let m1=[],agg=[],sb=[],loading=false,busy=false,gen=0;
+const SUB=()=>C.tf<60,baseArr=()=>SUB()?sb:m1;   // khung giây (< 60s) dựng từ sb (nến 1 giây từ tick), các khung còn lại dựng từ m1 (nến M1)
+const baseSig=()=>{const A=baseArr(),l=A[A.length-1];return l?l[5]+","+l[4]:"0,0"};
 const COL=()=>P.theme==="dark"?{up:"#3df5c0",dn:"#ff5c8a",tx:"#c4b79a",gr:"rgba(244,201,106,.08)",bd:"rgba(244,201,106,.22)"}:{up:"#08987a",dn:"#d6336c",tx:"#7a6740",gr:"rgba(176,116,26,.1)",bd:"rgba(176,116,26,.25)"};
 const chart=LightweightCharts.createChart($("chart"),{layout:{background:{color:"transparent"},textColor:"#c4b79a",fontFamily:"Space Grotesk"},rightPriceScale:{borderColor:"rgba(244,201,106,.22)"},timeScale:{timeVisible:true,secondsVisible:false},crosshair:{mode:0},autoSize:true});
 const cs=chart.addCandlestickSeries({borderVisible:false});
@@ -27,6 +29,7 @@ function chErr(w,e){CHW.err=w+": "+String(e&&e.message||e);const n=Date.now();if
 let fpKick=0,m1Old=0,m1Span=86400,m1Empty=0,m1NoMore=false,fillBusy=false,fillRetry=0;
 const M1_MAXSPAN=8*86400,M1_GIVEUP=30*86400;    // gặp liên tiếp 30 ngày không có nến thì coi như hết lịch sử
 async function loadM1(){
+  if(SUB())return loadSub();
   const g=++gen;loading=true;CHW.loadAt=Date.now();fillBusy=false;m1NoMore=false;m1Empty=0;m1Span=86400;fillRetry=0;
   const now=Math.floor(Date.now()/1000)+120;
   let acc=[];
@@ -62,6 +65,7 @@ async function loadM1(){
 /* Nối thêm nến cũ vào bên trái khi người dùng kéo chart gần tới đầu dữ liệu (còn < 40 nến bên trái màn hình).
    Giữ nguyên vị trí đang xem (bù số nến vừa thêm), nên chart không bị giật. */
 async function fillLeft(){
+  if(SUB())return subFill();
   if(fillBusy||loading||m1NoMore||!m1.length||Date.now()<fillRetry)return;
   const g=gen,ts=chart.timeScale();fillBusy=true;
   try{
@@ -81,7 +85,8 @@ async function fillLeft(){
 }
 function prependM1(bars){
   const ts=chart.timeScale(),r=ts.getVisibleLogicalRange(),n0=Math.max(0,Math.ceil(r?r.from:0)),t0=agg[n0]&&agg[n0].time;
-  m1=bars.concat(m1);rebuild(false);
+  if(SUB())sb=sbJoin(bars,sb);else m1=bars.concat(m1);
+  rebuild(false);
   if(!r||t0==null)return;
   const i=agg.findIndex(b=>b.time===t0);if(i<0)return;
   const d=i-n0,c=ts.getVisibleLogicalRange();                // giữ đúng các nến đang xem (chart có thể đã tự giữ, thì không làm gì)
@@ -92,10 +97,10 @@ chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{
   if(r.from<40)fillLeft();
   clearTimeout(fpKick);fpKick=setTimeout(()=>{if(window.fpSync)fpSync()},400);   // footprint tick cũng tải thêm theo vùng đang xem
 });
-const bucket=(t,tf)=>tf===604800?Math.floor((t-345600)/604800)*604800+345600:Math.floor(t/tf)*tf;
+const bucket=(t,tf)=>tf>=604800&&tf%604800===0?Math.floor((t-345600)/tf)*tf+345600:Math.floor(t/tf)*tf;
 function rebuild(fit){
   const raw=[];let cur=null;
-  for(const x of m1){
+  for(const x of baseArr()){
     const k=bucket(x[0],C.tf);
     if(!cur||cur.st!==k){cur={st:k,time:0,open:x[1],high:x[2],low:x[3],close:x[4],v:x[5]};raw.push(cur)}
     else{if(x[2]>cur.high)cur.high=x[2];if(x[3]<cur.low)cur.low=x[3];cur.close=x[4];cur.v+=x[5]}
@@ -108,11 +113,11 @@ function rebuild(fit){
   if(fit)chart.timeScale().scrollToRealTime();   // đổi khung giờ: về nến mới nhất (dữ liệu cũ hơn tự tải khi kéo sang trái)
   renderInd();
 }
-function applyLive(b){
-  const last=m1[m1.length-1];
-  if(last&&last[0]===b[0])m1[m1.length-1]=b;else if(!last||b[0]>last[0])m1.push(b);else{if(Date.now()-cuAt>15000)catchUp();return}   // nến live cũ hơn nến cuối: dữ liệu lệch, bù lại thay vì im lặng bỏ qua
+function applyLive(b,A){
+  A=A||m1;const last=A[A.length-1];
+  if(last&&last[0]===b[0])A[A.length-1]=b;else if(!last||b[0]>last[0])A.push(b);else{if(Date.now()-cuAt>15000)catchUp();return}   // nến live cũ hơn nến cuối: dữ liệu lệch, bù lại thay vì im lặng bỏ qua
   const k=bucket(b[0],C.tf);let o,h,l,c,v=0;
-  for(let i=m1.length-1;i>=0&&m1[i][0]>=k;i--){const x=m1[i];o=x[1];c=c??x[4];h=Math.max(h??x[2],x[2]);l=Math.min(l??x[3],x[3]);v+=x[5]}
+  for(let i=A.length-1;i>=0&&A[i][0]>=k;i--){const x=A[i];o=x[1];c=c??x[4];h=Math.max(h??x[2],x[2]);l=Math.min(l??x[3],x[3]);v+=x[5]}
   if(o===undefined)return;
   const bar={st:k,time:disp(k),open:o,high:h,low:l,close:c,v},a=agg[agg.length-1];
   if(a&&a.st===k)agg[agg.length-1]=bar;else if(!a||bar.time>a.time)agg.push(bar);else{if(Date.now()-cuAt>15000)catchUp();return}
@@ -128,7 +133,7 @@ const safeInd=()=>{try{liveInd()}catch(e){chErr("liveInd",e)}};
    KHÔNG BAO GIỜ được tải: chart bị hở, và với khung lớn thì high/low/open của nến hiện tại sai. Hàm này tải lại từ nến cuối tới giờ rồi ghép vào. */
 let cuBusy=false,cuAt=0;
 async function catchUp(){
-  if(cuBusy||loading||!ctReady()||!m1.length)return;
+  if(SUB()||cuBusy||loading||!ctReady()||!m1.length)return;
   const g=gen;cuBusy=true;cuAt=Date.now();
   try{
     const bars=await ctBars(s2u(m1[m1.length-1][0])-120,Math.floor(Date.now()/1000)+120);
@@ -152,7 +157,8 @@ function poll(){
     }
   }catch(e){chErr("quote",e)}
   try{
-    if(CT.barDirty&&CT.liveBar&&m1.length&&!loading){
+    if(SUB()){if(SB.dirty&&SB.ready&&!loading&&sb.length){SB.dirty=false;applyLive(sb[sb.length-1],sb)}}   // khung giây: nến chạy theo từng tick bid
+    else if(CT.barDirty&&CT.liveBar&&m1.length&&!loading){
       if(CT.liveBar[0]-m1[m1.length-1][0]>120&&Date.now()-cuAt>15000)catchUp();   // nến live nhảy xa hơn 2 phút so với nến cuối: thiếu nến ở giữa
       CT.barDirty=false;applyLive(CT.liveBar)}
   }catch(e){chErr("applyLive",e)}
@@ -164,14 +170,142 @@ function poll(){
 function chartWatch(){
   const n=Date.now();
   if(loading&&CHW.loadAt&&n-CHW.loadAt>CHW.loadMax){CHW.loadAt=0;loading=false;chErr("loading","kẹt quá "+Math.round(CHW.loadMax/1e3)+"s, tải lại");loadM1();return}
-  if(loading||!m1.length)return;
+  if(loading||!baseArr().length)return;
   const lag=CT.dirtyAt>CHW.applied&&n-CT.dirtyAt<3000?n-CHW.applied:0;
-  if(lag<CHW.stale){if(CHW.lvl){CHW.lvl=0;status(m1.length+" nến M1 · cTrader","ok")}return}
+  if(lag<CHW.stale){if(CHW.lvl){CHW.lvl=0;status(baseArr().length+(SUB()?" nến 1 giây · tick":" nến M1 · cTrader"),"ok")}return}
   if(lag>=CHW.reload&&CHW.lvl<3){CHW.lvl=3;CHW.applied=n;status("Chart đứng, đang tải lại…","bad");loadM1();return}
   if(lag>=CHW.mid&&CHW.lvl<2){CHW.lvl=2;status("Chart chậm cập nhật, đang bù nến…","bad");catchUp();return}
   if(CHW.lvl<1){CHW.lvl=1;status("Chart chậm cập nhật, đang khôi phục…","bad");rebuild(false);CT.barDirty=true}
 }
-function buildTfs(){$("tfs").innerHTML=TFS.map(([n,s])=>`<button class="tf${s===C.tf?" on":""}" data-s="${s}">${n}</button>`).join("")}
-$("tfs").onclick=e=>{const b=e.target.closest("button");if(!b)return;C.tf=+b.dataset.s;sv("tp_tf",C.tf);buildTfs();rebuild(true)};
+function buildTfs(){
+  const L=allTfs();if(!L.some(t=>t[1]===C.tf)){L.push([tfName(C.tf),C.tf]);L.sort((a,b)=>a[1]-b[1])}   // khung đang chọn đã bị xoá khỏi danh sách: vẫn hiện tới khi đổi khung
+  $("tfs").innerHTML=L.map(([n,s])=>{const cu=CTF.includes(s);return`<button class="tf${s===C.tf?" on":""}${cu?" cu":""}" data-s="${s}">${n}${cu?`<i class="x" data-del="${s}" role="button" title="Xoá khung này" aria-label="Xoá khung này">×</i>`:""}</button>`}).join("")
+    +`<button type="button" class="tf" id="tfAdd" title="Khung tuỳ chọn" aria-label="Khung tuỳ chọn" aria-haspopup="dialog">+</button>`;
+}
+const applyTfOpts=()=>allCh().forEach(x=>x.applyOptions({timeScale:{secondsVisible:SUB()}}));
+function setTf(s){
+  if(!okTf(s))return;
+  const was=SUB();C.tf=s;sv("tp_tf",s);buildTfs();applyTfOpts();
+  if(SUB()){if(!was||!sb.length)loadSub();else{rebuild(true);fillLeft()}}
+  else if(was){rebuild(true);loadM1()}      // từ khung giây về khung phút: nến M1 cũ vẽ ngay, rồi tải lại cho mới
+  else rebuild(true);
+  tfNote();
+}
+function tfNote(){   // Footprint / Big Trade / Statistic cần dữ liệu theo phút
+  if(!SUB())return;try{if(fpOn()||btOn()||stOn())status("Footprint / Big Trade / Statistic cần khung từ M1 trở lên","bad")}catch{}
+}
+function delTf(s){CTF=CTF.filter(x=>x!==s);saveCtf();if(C.tf===s)setTf(900);else buildTfs()}
+$("tfs").onclick=e=>{
+  const x=e.target.closest("[data-del]");if(x){e.stopPropagation();delTf(+x.dataset.del);return}
+  const b=e.target.closest("button");if(!b)return;
+  if(b.id==="tfAdd"){tfPop(b);return}
+  setTf(+b.dataset.s);
+};
+/* Ô nhập khung tuỳ chọn (nổi, gắn vào body để không bị thanh khung giờ cuộn ngang cắt mất) */
+let tfP=null;
+function tfPop(btn){
+  if(tfP){tfClose();return}
+  const el=document.createElement("div");el.className="tfp";el.setAttribute("role","dialog");el.setAttribute("aria-label","Khung tuỳ chọn");
+  el.innerHTML=`<div class="tfpt">Khung tuỳ chọn</div><div class="tfpr"><input type="number" id="tfpN" min="1" step="1" inputmode="numeric" aria-label="Số" placeholder="vd 7"><select id="tfpU" aria-label="Đơn vị"><option value="s">Giây</option><option value="m" selected>Phút</option><option value="h">Giờ</option><option value="d">Ngày</option><option value="w">Tuần</option></select></div><div class="tfpm" id="tfpM"></div><button type="button" class="btn sm" id="tfpOk">Dùng khung này</button>`;
+  document.body.appendChild(el);tfP=el;
+  const r=btn.getBoundingClientRect(),w=el.offsetWidth,L=Math.max(8,Math.min(r.left,innerWidth-w-8));
+  el.style.left=L+"px";el.style.top=Math.min(r.bottom+6,Math.max(8,innerHeight-el.offsetHeight-8))+"px";
+  const n=el.querySelector("#tfpN"),u=el.querySelector("#tfpU"),m=el.querySelector("#tfpM");
+  const go=()=>{
+    const v=Math.round(+n.value),s=v*TF_UNIT[u.value];
+    if(!(v>=1)){m.textContent="Nhập số từ 1 trở lên";return}
+    if(u.value==="s"&&v>59){m.textContent="Giây chỉ nhận 1–59 (từ 60 giây hãy chọn Phút)";return}
+    if(s>TF_MAX){m.textContent="Tối đa 4 tuần";return}
+    if(!okTf(s)){m.textContent="Khung không hợp lệ";return}
+    if(!TFS.some(t=>t[1]===s)&&!CTF.includes(s)){
+      if(CTF.length>=TF_CAP){m.textContent="Tối đa "+TF_CAP+" khung tuỳ chọn, hãy xoá bớt (dấu × trên nút khung)";return}
+      CTF.push(s);CTF.sort((a,b)=>a-b);saveCtf();
+    }
+    tfClose();setTf(s);
+  };
+  el.querySelector("#tfpOk").onclick=go;
+  el.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();go()}else if(e.key==="Escape"){tfClose();btn.focus()}});
+  setTimeout(()=>{document.addEventListener("pointerdown",tfOut,true)},0);
+  n.focus();
+}
+const tfOut=e=>{if(tfP&&!tfP.contains(e.target)&&!e.target.closest("#tfAdd"))tfClose()};
+function tfClose(){if(tfP){tfP.remove();tfP=null}document.removeEventListener("pointerdown",tfOut,true)}
 $("sym").value=C.sym;
 /* đổi mã: xem symbols.js (ô chọn mã tuỳ biến) */
+
+/* ================= KHUNG GIÂY (< 60 giây) =================
+   cTrader chỉ có nến từ M1 trở lên, nên khung giây được dựng từ TICK bid (giống nến M1 của cTrader cũng tính theo bid):
+   - lịch sử: GetTickData (ctTicks) gom thành nến 1 giây vào sb = [giờ server, o, h, l, c, số tick], rồi rebuild() gom tiếp theo khung đang chọn (5s, 15s, 30s...);
+   - live: mỗi báo giá bid (ctSpot -> sbLive) cập nhật nến 1 giây cuối, poll() áp lên chart.
+   Volume = số lần bid đổi giá (tick volume). Tick tải THEO NHU CẦU như M1: lần đầu 30 phút gần nhất, kéo chart sang trái thì tải thêm (tối đa 24 giờ). */
+const SB={q:[],ready:false,dirty:false};
+let sbOld=0,sbSpan=3600e3,sbNoMore=false,sbEmpty=0,sbOffH=-1,sbOffV=0;
+const SB_FIRST=1800e3,SB_MAXSPAN=4*3600e3,SB_CAP=24*3600e3,SB_GIVEUP=3*86400e3;
+const sbOff=u=>{const h=Math.floor(u/3600);if(h!==sbOffH){sbOffH=h;sbOffV=u2s(h*3600)-h*3600}return sbOffV};   // chênh lệch UTC -> giờ server (đổi theo giờ cho nhanh)
+function sbBuild(T){
+  const out=[];let cur=null;
+  for(const [t,p] of T){const u=Math.floor(t/1000),k=u+sbOff(u),v=p/1e5;
+    if(!cur||cur[0]!==k){cur=[k,v,v,v,v,1];out.push(cur)}
+    else{if(v>cur[2])cur[2]=v;if(v<cur[3])cur[3]=v;cur[4]=v;cur[5]++}}
+  return out;
+}
+function sbJoin(a,b){   // a = nến cũ hơn, b = nến hiện có; nến 1 giây nằm vắt qua ranh giới thì gộp lại
+  if(a.length&&b.length&&a[a.length-1][0]===b[0][0]){const x=a.pop(),y=b[0];y[1]=x[1];if(x[2]>y[2])y[2]=x[2];if(x[3]<y[3])y[3]=x[3];y[5]+=x[5]}
+  return a.concat(b);
+}
+function sbPush(ts,v){
+  const u=Math.floor(ts/1000),k=u+sbOff(u),L=sb[sb.length-1];
+  if(L&&L[0]===k){if(v>L[2])L[2]=v;if(v<L[3])L[3]=v;L[4]=v;L[5]++}
+  else if(!L||k>L[0])sb.push([k,v,v,v,v,1]);
+  else return;
+  SB.dirty=true;CT.dirtyAt=Date.now();
+}
+function sbLive(ts,bid){   // ctSpot gọi cho mỗi báo giá có bid
+  if(!SUB())return;
+  if(!SB.ready){if(SB.q.length<100000)SB.q.push([ts,bid]);return}   // đang tải lịch sử: giữ lại, phát lại sau để không hở
+  sbPush(ts,bid/1e5);
+}
+const sbStatus=()=>status(sb.length+" nến 1 giây · tick cTrader"+(sbNoMore?" · đã tới giới hạn lịch sử":""),"ok");
+async function loadSub(){
+  const g=++gen;loading=true;CHW.loadAt=Date.now();fillBusy=false;sbNoMore=false;sbEmpty=0;sbSpan=3600e3;fillRetry=0;SB.ready=false;SB.q=[];SB.dirty=false;
+  try{
+    status("Đang kết nối cTrader…");
+    try{await ctEnsure()}catch(e){if(g===gen)status("cTrader: "+why(e),"bad");return}
+    if(g!==gen)return;
+    status("Đang tải tick…");
+    const hi=Date.now();let top=hi,span=SB_FIRST,T=[],miss=0;
+    for(;;){                                              // cuối tuần/ngày lễ không có tick: lùi dần tới khi có
+      const lo=top-span;T=await ctTicks(1,lo,top);
+      if(g!==gen)return;
+      sbOld=lo;
+      if(T.length)break;
+      miss+=top-lo;top=lo;span=Math.min(span*2,86400e3);
+      if(miss>=SB_GIVEUP){sbNoMore=true;break}
+    }
+    sb=sbBuild(T);SB.ready=true;
+    const q=SB.q;SB.q=[];for(const [t,b] of q)if(t>hi)sbPush(t,b/1e5);   // tick live tới trong lúc tải
+    rebuild(true);
+    if(sb.length)sbStatus();else status("Chưa có tick cho "+C.sym+" (thị trường đóng cửa hoặc broker không lưu tick)","bad");
+    tfNote();
+  }catch(e){status("Lỗi tải tick: "+why(e),"bad");SB.ready=true;SB.q=[]}
+  finally{if(g===gen){loading=false;CHW.loadAt=0;if(sb.length)subFill()}}
+}
+async function subFill(){
+  if(!SUB()||fillBusy||loading||sbNoMore||!sb.length||Date.now()<fillRetry)return;
+  const g=gen,ts=chart.timeScale();fillBusy=true;
+  try{
+    for(;;){
+      const r=ts.getVisibleLogicalRange();
+      if(!r||r.from>=40)break;
+      if(Date.now()-sbOld>=SB_CAP){sbNoMore=true;break}
+      status("Đang tải thêm tick cũ… "+sb.length+" nến");
+      const top=sbOld,lo=top-sbSpan,T=await ctTicks(1,lo,top-1);
+      if(g!==gen||!SUB())return;
+      sbOld=lo;sbSpan=Math.min(sbSpan*2,SB_MAXSPAN);
+      if(T.length){sbEmpty=0;prependM1(sbBuild(T))}
+      else{sbEmpty+=top-lo;if(sbEmpty>=SB_GIVEUP){sbNoMore=true;break}}
+    }
+    sbStatus();
+  }catch(e){fillRetry=Date.now()+5000;status("Lỗi tải thêm tick cũ: "+why(e),"bad")}
+  finally{if(g===gen)fillBusy=false}
+}

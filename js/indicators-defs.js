@@ -56,7 +56,7 @@ function rsiDiv(A,r,E){
 function dCandles(A,keyFn,a,E,isUp){
   const n=A.c.length,O=Array(n).fill(null),H=Array(n).fill(null),Lo=Array(n).fill(null),La=Array(n).fill(null);
   let p=0,cum=0,pd=1,cur=-1,lk=null,go=false;
-  for(let j=0;j<m1.length;j++){const x=m1[j],o=x[1],c=x[4],v=x[5]||0,pc=j?m1[j-1][4]:o;
+  const B=baseArr();for(let j=0;j<B.length;j++){const x=B[j],o=x[1],c=x[4],v=x[5]||0,pc=j?B[j-1][4]:o;
     const dir=c>o?1:c<o?-1:c>pc?1:c<pc?-1:pd;pd=dir;
     const k=bucket(x[0],C.tf);while(p<n&&A.s[p]<k)p++;if(p>=n)break;if(A.s[p]!==k)continue;
     if(p!==cur){cur=p;const key=keyFn?keyFn(A.s[p]):p;if(!go||key!==lk)cum=0;go=true;lk=key;O[p]=H[p]=Lo[p]=cum}
