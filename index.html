@@ -9,8 +9,9 @@
 <link rel="icon" type="image/png" href="img/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Unbounded:wght@800&family=Sora:wght@500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20">
-<link rel="stylesheet" href="css/multichart.css?v=20">
+<link rel="stylesheet" href="css/style.css?v=22">
+<link rel="stylesheet" href="css/multichart.css?v=22">
+<link rel="stylesheet" href="css/symbols.css?v=22">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body class="nt">
@@ -28,7 +29,7 @@
 
 <section class="view on" id="v-chart">
   <div class="card bar">
-    <input id="sym" list="symList" title="Mã giao dịch (đúng tên trên cTrader, vd XAUUSD)" aria-label="Mã"><datalist id="symList"></datalist>
+    <div class="symw"><input id="sym" title="Chọn mã giao dịch" aria-label="Mã" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="symDd" autocomplete="off" autocapitalize="characters" spellcheck="false"><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></div>
     <div class="tfs" id="tfs"></div>
     <span class="pill" id="st">Chưa kết nối</span>
     <button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button>
@@ -51,6 +52,7 @@
 </div>
 
 <section class="view" id="v-ind">
+  <div class="card" id="indTgtW" style="margin-bottom:14px;display:none"><h2>Thêm indicator vào chart</h2><div class="tfs" id="indTgt" data-no-i18n></div></div>
   <div class="card"><h2>Đang dùng trên chart</h2><div id="actList"></div></div>
   <div class="card" style="margin-top:14px"><div class="bar" style="margin-bottom:12px"><h2 style="margin:0">Kho indicator</h2><div class="tfs" id="indF"></div></div><div class="grid" id="indGrid"></div></div>
 </section>
@@ -72,26 +74,27 @@
 </div></div>
 
 
-<script src="js/config.js?v=20"></script>
-<script src="js/core.js?v=20"></script>
-<script src="js/timezone.js?v=20"></script>
-<script src="js/ctrader.js?v=20"></script>
-<script src="js/chart.js?v=20"></script>
-<script src="js/candle-style.js?v=20"></script>
-<script src="js/indicators-defs.js?v=20"></script>
-<script src="js/indicators-engine.js?v=20"></script>
-<script src="js/connection-ui.js?v=20"></script>
-<script src="js/init.js?v=20"></script>
-<script src="js/drawings-core.js?v=20"></script>
-<script src="js/volume-profile.js?v=20"></script>
-<script src="js/orderflow-footprint.js?v=20"></script>
-<script src="js/orderflow-bigtrade.js?v=20"></script>
-<script src="js/orderflow-statistic.js?v=20"></script>
-<script src="js/drawings-interact.js?v=20"></script>
-<script src="js/mobile.js?v=20"></script>
-<script src="js/embed.js?v=20"></script>
-<script src="js/multichart.js?v=20"></script>
-<script src="js/i18n-data.js?v=20"></script>
-<script src="js/i18n.js?v=20"></script>
+<script src="js/config.js?v=22"></script>
+<script src="js/core.js?v=22"></script>
+<script src="js/symbols.js?v=22"></script>
+<script src="js/timezone.js?v=22"></script>
+<script src="js/ctrader.js?v=22"></script>
+<script src="js/chart.js?v=22"></script>
+<script src="js/candle-style.js?v=22"></script>
+<script src="js/indicators-defs.js?v=22"></script>
+<script src="js/indicators-engine.js?v=22"></script>
+<script src="js/connection-ui.js?v=22"></script>
+<script src="js/init.js?v=22"></script>
+<script src="js/drawings-core.js?v=22"></script>
+<script src="js/volume-profile.js?v=22"></script>
+<script src="js/orderflow-footprint.js?v=22"></script>
+<script src="js/orderflow-bigtrade.js?v=22"></script>
+<script src="js/orderflow-statistic.js?v=22"></script>
+<script src="js/drawings-interact.js?v=22"></script>
+<script src="js/mobile.js?v=22"></script>
+<script src="js/embed.js?v=22"></script>
+<script src="js/multichart.js?v=22"></script>
+<script src="js/i18n-data.js?v=22"></script>
+<script src="js/i18n.js?v=22"></script>
 </body>
 </html>
